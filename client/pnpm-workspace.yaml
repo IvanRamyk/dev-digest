@@ -1,0 +1,9 @@
+# pnpm >= 11 refuses to install until every dependency with a build script is
+# explicitly allowed or denied here. Without this file `pnpm install` (and any
+# script that triggers the implicit deps check, e.g. `pnpm dev`) fails with
+# ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  # required: Next.js builds and vitest run through esbuild's native binary
+  esbuild: true
+  # required: next/image optimisation uses sharp's native bindings
+  sharp: true

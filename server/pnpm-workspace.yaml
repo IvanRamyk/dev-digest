@@ -1,0 +1,13 @@
+# pnpm >= 11 refuses to install until every dependency with a build script is
+# explicitly allowed or denied here. Without this file `pnpm install` (and any
+# script that triggers the implicit deps check, e.g. `pnpm db:migrate`) fails
+# with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  # required: tsx / vitest / drizzle-kit all run through esbuild's native binary
+  esbuild: true
+  # postinstall only wires up its own CLI shims — harmless, keeps output quiet
+  protobufjs: true
+  # optional native speedups for testcontainers' ssh transport; the JS
+  # fallbacks are used when unbuilt, so we skip the native compile
+  cpu-features: false
+  ssh2: false
