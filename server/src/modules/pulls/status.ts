@@ -1,4 +1,4 @@
-import type { PrStatus } from '@devdigest/shared';
+import type { PrStatus, FindingsBySeverity } from '@devdigest/shared';
 
 /**
  * PR-list rollup helpers (pure — no DB / `this`, so they unit-test cleanly).
@@ -28,6 +28,22 @@ export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
     else if (r.severity === 'SUGGESTION') c.suggestion += 1;
   }
   return c;
+}
+
+/**
+ * The same tally in the transport shape (`PrMeta.findings_by_severity`).
+ *
+ * Deliberately built on `rollupSeverities` rather than a SQL `GROUP BY severity`:
+ * `findings.severity` is free-form text with no CHECK constraint, so a grouped
+ * query would silently produce a fourth bucket for a severity no contract or
+ * colour map knows. Anything outside the three known values is dropped here.
+ *
+ * An empty input is `{0,0,0}` — "reviewed, and clean". "Never reviewed" is `null`
+ * and is the caller's job to represent.
+ */
+export function findingsBySeverity(rows: { severity: string }[]): FindingsBySeverity {
+  const c = rollupSeverities(rows);
+  return { CRITICAL: c.critical, WARNING: c.warning, SUGGESTION: c.suggestion };
 }
 
 /**

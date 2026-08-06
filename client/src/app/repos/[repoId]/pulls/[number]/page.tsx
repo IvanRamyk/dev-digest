@@ -10,6 +10,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "../../../../../components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
+import { latestPerAgentRuns } from "@/components/severity-counts";
 import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
@@ -69,9 +70,18 @@ export default function PRDetailPage() {
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
+  // Counts describe the CURRENT state of the review: per agent, the review from
+  // that agent's latest RUN — and nothing when that run failed, was cancelled, or
+  // is still going. Keyed on runs, not reviews, so a dead newest run suppresses
+  // the agent's earlier findings instead of resurrecting them. Matches the PR
+  // list's findings_by_severity and cost_usd.
+  //
+  // The accordion list below still renders every review: run history does not
+  // disappear when a run is superseded, so the tab badge deliberately does not
+  // equal the sum of the accordion headers.
   const allFindings: FindingRecord[] = React.useMemo(
-    () => runs.flatMap((r) => r.findings),
-    [reviews],
+    () => latestPerAgentRuns(runs, prRuns ?? []).flatMap((r) => r.findings),
+    [runs, prRuns],
   );
   const lethalTrifecta = allFindings.filter((f) => f.kind === "lethal_trifecta");
   const findingsCount = allFindings.length;

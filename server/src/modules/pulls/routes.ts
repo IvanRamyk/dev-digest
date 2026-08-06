@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, findingsBySeverity } from './status.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -113,8 +113,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap.
     const prIds = rows.map((r) => r.id);
     const latestReviewByPr = new Map<string, { score: number | null }>();
     if (prIds.length > 0) {
@@ -129,9 +128,119 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // TOTAL COST per PR: the sum of each agent's LATEST run. Reviewing a PR with
+    // three agents costs three runs, so the column has to answer "what did this
+    // PR cost me", not "what did the last agent cost" — those differ by 3-5x.
+    // Summing every run ever would instead keep growing across re-runs and never
+    // match a single review, so older attempts by the SAME agent are superseded
+    // rather than added.
+    //
+    // An agent whose LATEST run has no price contributes NOTHING — it does not
+    // fall through to that agent's older priced run. A superseded run describes a
+    // review that no longer exists, and quietly resurrecting its figure makes the
+    // column describe a mix of the current attempt and an abandoned one. This is
+    // why unpriced runs are NOT filtered out in SQL: the failed newest row has to
+    // be visible here to win the (pr, agent) slot and suppress its predecessor.
+    //
+    // A null total still means "no priced run", never "free" — free models
+    // legitimately store 0, so the key is only created on a real contribution.
+    const costByPr = new Map<string, number>();
+    if (prIds.length > 0) {
+      const runRows = await container.db
+        .select({
+          prId: t.agentRuns.prId,
+          agentId: t.agentRuns.agentId,
+          costUsd: t.agentRuns.costUsd,
+        })
+        .from(t.agentRuns)
+        .where(inArray(t.agentRuns.prId, prIds))
+        .orderBy(desc(t.agentRuns.ranAt));
+      // Rows are newest-first, so the first (pr, agent) pair seen is that agent's
+      // latest run. Deleted agents leave agent_id NULL (ON DELETE SET NULL) and
+      // are indistinguishable from each other, so they share ONE bucket — that
+      // undercounts an orphaned batch, but never double-counts one agent's retries.
+      const seen = new Set<string>();
+      for (const r of runRows) {
+        if (!r.prId) continue;
+        const key = `${r.prId}:${r.agentId ?? 'orphaned'}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // Slot taken either way: an unpriced latest run suppresses this agent's
+        // older runs instead of deferring to them.
+        if (r.costUsd == null) continue;
+        costByPr.set(r.prId, (costByPr.get(r.prId) ?? 0) + r.costUsd);
+      }
+    }
+
+    // FINDINGS per severity: the tally over each agent's LATEST RUN, keyed on
+    // agent_runs rather than on reviews, and matching cost_usd above.
+    //
+    // Keying on runs is what makes a dead newest run suppress its predecessor.
+    // insertReview only runs on the success path (reviews/run-executor.ts), so a
+    // failed / cancelled / still-running run writes NO reviews row at all — a
+    // reviews-keyed query cannot see that the agent has been re-run and silently
+    // reports the older attempt's findings as if they were current. A `running`
+    // run therefore also contributes nothing until it settles: mid-review the
+    // column goes quiet instead of asserting a stale picture.
+    //
+    // The two LEFT JOINs each preserve a distinct "reviewed, and clean" case:
+    // runs→reviews keeps a run whose review has not landed, reviews→findings
+    // keeps a review that found nothing. Unknown severities are dropped by
+    // findingsBySeverity, never bucketed.
+    const findingsByPr = new Map<string, { severity: string }[]>();
+    if (prIds.length > 0) {
+      const runFindingRows = await container.db
+        .select({
+          prId: t.agentRuns.prId,
+          agentId: t.agentRuns.agentId,
+          runId: t.agentRuns.id,
+          severity: t.findings.severity,
+        })
+        .from(t.agentRuns)
+        .leftJoin(t.reviews, eq(t.reviews.runId, t.agentRuns.id))
+        .leftJoin(t.findings, eq(t.findings.reviewId, t.reviews.id))
+        .where(inArray(t.agentRuns.prId, prIds))
+        .orderBy(desc(t.agentRuns.ranAt));
+      // Rows are newest-first, so the first (pr, agent) pair seen is that agent's
+      // latest run; every earlier run by the same agent is superseded. Deleted
+      // agents leave agent_id NULL and share ONE bucket — that undercounts an
+      // orphaned batch, but never double-counts one agent's retries.
+      const keptRunIds = new Set<string>();
+      const seenAgents = new Set<string>();
+      for (const row of runFindingRows) {
+        if (!row.prId) continue;
+        const agentKey = `${row.prId}:${row.agentId ?? 'orphaned'}`;
+        if (!seenAgents.has(agentKey)) {
+          seenAgents.add(agentKey);
+          keptRunIds.add(row.runId);
+        }
+        // The entry itself (even when empty) is what makes the value non-null.
+        if (!findingsByPr.has(row.prId)) findingsByPr.set(row.prId, []);
+        if (keptRunIds.has(row.runId) && row.severity != null) {
+          findingsByPr.get(row.prId)!.push({ severity: row.severity });
+        }
+      }
+
+      // Reviews with NO run behind them: the seeded demo review (db/seed.ts) and
+      // any review whose run row was deleted. Nothing can supersede them — there
+      // is no newer run by "their" agent to win the slot — so they always count.
+      // Without this the seeded PR would report {0,0,0} and its visible findings
+      // would vanish from the column.
+      const orphanRows = await container.db
+        .select({ prId: t.reviews.prId, severity: t.findings.severity })
+        .from(t.reviews)
+        .leftJoin(t.findings, eq(t.findings.reviewId, t.reviews.id))
+        .where(and(inArray(t.reviews.prId, prIds), isNull(t.reviews.runId)));
+      for (const row of orphanRows) {
+        if (!findingsByPr.has(row.prId)) findingsByPr.set(row.prId, []);
+        if (row.severity != null) findingsByPr.get(row.prId)!.push({ severity: row.severity });
+      }
+    }
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
+      const prFindings = findingsByPr.get(r.id);
       return {
         id: r.id,
         number: r.number,
@@ -153,6 +262,9 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: costByPr.get(r.id) ?? null,
+        // null = never reviewed; {0,0,0} = reviewed and clean. Not the same thing.
+        findings_by_severity: prFindings ? findingsBySeverity(prFindings) : null,
       };
     });
   });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Provider } from './knowledge.js';
+import { FindingsBySeverity } from './findings.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -170,6 +171,16 @@ export const PrMeta = z.object({
   updated_at: z.string().nullish(),
   // Latest-review score (list endpoint only; null/absent until reviewed).
   score: z.number().int().nullish(),
+  // Total USD spent reviewing this PR: the sum of each agent's latest priced run
+  // (list endpoint only). Re-running one agent supersedes its own earlier run
+  // rather than adding to the total. null/absent = never run, or no run was ever
+  // priced — never means "free".
+  cost_usd: z.number().nullish(),
+  // Findings per severity for this PR: the tally over each agent's LATEST review
+  // (list endpoint only), so re-running one agent supersedes its own earlier
+  // review rather than adding to the counts. `null`/absent = never reviewed;
+  // `{0,0,0}` = reviewed and clean. The two must not be conflated.
+  findings_by_severity: FindingsBySeverity.nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

@@ -6,7 +6,12 @@
  * + age, so it gets unit coverage independent of the route's queries.
  */
 import { describe, it, expect } from 'vitest';
-import { deriveReviewStatus, rollupSeverities, STALE_DAYS } from '../src/modules/pulls/status.js';
+import {
+  deriveReviewStatus,
+  findingsBySeverity,
+  rollupSeverities,
+  STALE_DAYS,
+} from '../src/modules/pulls/status.js';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 5, 11);
@@ -64,5 +69,32 @@ describe('rollupSeverities', () => {
 
   it('is all-zero for no findings', () => {
     expect(rollupSeverities([])).toEqual({ critical: 0, warning: 0, suggestion: 0 });
+  });
+});
+
+describe('findingsBySeverity', () => {
+  it('emits the transport shape with uppercase keys', () => {
+    expect(
+      findingsBySeverity([
+        { severity: 'CRITICAL' },
+        { severity: 'CRITICAL' },
+        { severity: 'CRITICAL' },
+        { severity: 'WARNING' },
+        { severity: 'SUGGESTION' },
+        { severity: 'SUGGESTION' },
+      ]),
+    ).toEqual({ CRITICAL: 3, WARNING: 1, SUGGESTION: 2 });
+  });
+
+  it('drops an unknown severity instead of creating a fourth bucket', () => {
+    // findings.severity is free-form text with no CHECK constraint, so a model
+    // can write anything. A fourth key has no contract, colour, or icon.
+    const counts = findingsBySeverity([{ severity: 'HIGH' }, { severity: 'CRITICAL' }]);
+    expect(counts).toEqual({ CRITICAL: 1, WARNING: 0, SUGGESTION: 0 });
+    expect(Object.keys(counts)).toEqual(['CRITICAL', 'WARNING', 'SUGGESTION']);
+  });
+
+  it('is all-zero for a review that found nothing (reviewed and clean, not "no data")', () => {
+    expect(findingsBySeverity([])).toEqual({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
   });
 });

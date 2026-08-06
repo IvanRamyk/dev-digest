@@ -15,6 +15,7 @@ import {
   Settings,
   Repo,
   PrDetail,
+  PrMeta,
 } from '@devdigest/shared';
 
 /**
@@ -157,7 +158,7 @@ describe('AI contracts parse fixtures', () => {
   it('RunTrace (data2.jsx TRACE single-document)', () => {
     const trace = RunTrace.parse({
       config: { agent: 'Security Reviewer', version: 'v7', model: 'gpt-4.1', pr: 482, source: 'local' },
-      stats: { duration_ms: 8200, tokens_in: 14820, tokens_out: 1240, findings: 3, grounding: '3/3 passed' },
+      stats: { duration_ms: 8200, tokens_in: 14820, tokens_out: 1240, cost_usd: 0.06, findings: 3, grounding: '3/3 passed' },
       prompt_assembly: { system: 's', user: 'u' },
       tool_calls: [{ tool: 'read_file', args: "'src/config.ts'", meta: '1,240 bytes', ms: 120 }],
       raw_output: '{}',
@@ -206,5 +207,36 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+
+  it('PrMeta.findings_by_severity: counts, all-zeros, and null are all valid', () => {
+    const base = {
+      id: 'p1',
+      number: 482,
+      title: 't',
+      author: 'a',
+      branch: 'b',
+      base: 'main',
+      head_sha: 'sha',
+      additions: 1,
+      deletions: 0,
+      files_count: 1,
+      status: 'open' as const,
+    };
+    expect(
+      PrMeta.parse({ ...base, findings_by_severity: { CRITICAL: 3, WARNING: 5, SUGGESTION: 2 } })
+        .findings_by_severity,
+    ).toEqual({ CRITICAL: 3, WARNING: 5, SUGGESTION: 2 });
+    // Reviewed and clean — a real result, distinct from "never reviewed".
+    expect(
+      PrMeta.parse({ ...base, findings_by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 } })
+        .findings_by_severity,
+    ).toEqual({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
+    // Never reviewed.
+    expect(PrMeta.parse({ ...base, findings_by_severity: null }).findings_by_severity).toBeNull();
+    // Absent is allowed too — the field is only populated by the list endpoint.
+    expect(() => PrMeta.parse(base)).not.toThrow();
+    // A partial tally is rejected: three correlated counts must not disagree.
+    expect(() => PrMeta.parse({ ...base, findings_by_severity: { CRITICAL: 1 } })).toThrow();
   });
 });

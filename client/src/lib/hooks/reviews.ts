@@ -36,23 +36,32 @@ export function usePrActiveRuns(prId: string | null | undefined) {
 
 // ---- Full run history for a PR (every agent_runs row, any status) ----
 /** All runs for a PR — done, failed (with error), cancelled, running. Survives
-   reload (DB-backed). Polls while anything is running so it self-updates. */
-export function usePrRuns(prId: string | null | undefined) {
+   reload (DB-backed). Polls while anything is running so it self-updates.
+
+   `enabled` defers the fetch until a caller wants it (the PR list's findings
+   hover card passes its hovered flag). The query key is unchanged, so hovering
+   warms the same cache entry the detail page then reads. */
+export function usePrRuns(prId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: ["pr-runs", prId],
     queryFn: () => api.get<RunSummary[]>(`/pulls/${prId}/runs`),
-    enabled: !!prId,
+    enabled: !!prId && enabled,
     refetchInterval: (query) =>
       (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
   });
 }
 
 // ---- Persisted reviews + findings for a PR ----
-export function usePrReviews(prId: string | null | undefined) {
+/** Reviews + their findings, newest first.
+
+   `enabled` lets a caller defer the fetch until it is actually wanted — the PR
+   list's findings hover card passes the hovered flag. The query key is unchanged,
+   so hovering warms the same cache entry the detail page then reads. */
+export function usePrReviews(prId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: ["reviews", prId],
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
-    enabled: !!prId,
+    enabled: !!prId && enabled,
   });
 }
 
