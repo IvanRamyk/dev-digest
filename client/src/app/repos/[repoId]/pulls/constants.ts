@@ -23,8 +23,9 @@ export const SIZE_COLOR: Record<string, string> = {
   L: "var(--crit)",
 };
 
-/** Grid template for both the header row and PR rows. */
-export const GRID = "1fr 132px 92px 60px 118px 78px";
+/** Grid template for both the header row and PR rows. Track count and order MUST
+    stay in lockstep with COLUMN_KEYS below, or the header and the rows misalign. */
+export const GRID = "1fr 132px 92px 60px 124px 118px 72px 78px";
 
 /** Line-count thresholds for the S/M/L size bucket. */
 export const SIZE_SMALL_MAX = 100;
@@ -44,7 +45,9 @@ export const COLUMN_KEYS: string[] = [
   "author",
   "size",
   "score",
+  "findings",
   "status",
+  "cost",
   "updated",
 ];
 

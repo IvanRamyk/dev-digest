@@ -5,9 +5,9 @@
  * and shows the review score ring.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { RunSummary } from "@devdigest/shared";
+import type { RunSummary, FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 import { RunHistory } from "./RunHistory";
 
@@ -25,6 +25,7 @@ function run(o: Partial<RunSummary>): RunSummary {
     duration_ms: 1000,
     tokens_in: 100,
     tokens_out: 50,
+    cost_usd: 0.0013,
     findings_count: 0,
     grounding: "0/0 passed",
     ran_at: "2026-06-11T18:44:34.000Z",
@@ -34,12 +35,33 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(runs: RunSummary[], findingsByRun?: Map<string, FindingRecord[]>) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} findingsByRun={findingsByRun} onOpenTrace={() => {}} />
     </NextIntlClientProvider>,
   );
+}
+
+function finding(o: Partial<FindingRecord> & { id: string }): FindingRecord {
+  return {
+    severity: "WARNING",
+    category: "perf",
+    title: `finding ${o.id}`,
+    file: "src/api/users.ts",
+    start_line: 45,
+    end_line: 52,
+    rationale: "Loop issues one query per user.",
+    suggestion: null,
+    confidence: 0.86,
+    kind: "finding",
+    trifecta_components: null,
+    evidence: null,
+    review_id: "r1",
+    accepted_at: null,
+    dismissed_at: null,
+    ...o,
+  };
 }
 
 describe("RunHistory — outcome badge", () => {
@@ -71,5 +93,68 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — run usage", () => {
+  it("a settled run shows its token total and cost", () => {
+    renderRuns([run({ status: "done", tokens_in: 9000, tokens_out: 119, cost_usd: 0.0013 })]);
+    expect(screen.getByText("9,119 tok · $0.0013")).toBeInTheDocument();
+  });
+
+  it("an unpriced run shows an em-dash next to its tokens, not $0", () => {
+    renderRuns([run({ status: "done", tokens_in: 9000, tokens_out: 119, cost_usd: null })]);
+    expect(screen.getByText("9,119 tok · —")).toBeInTheDocument();
+  });
+
+  it("a free model shows $0 — that is data, not missing data", () => {
+    renderRuns([run({ status: "done", tokens_in: 9000, tokens_out: 119, cost_usd: 0 })]);
+    expect(screen.getByText("9,119 tok · $0")).toBeInTheDocument();
+  });
+
+  it("a failed run reports no usage at all (no fake price)", () => {
+    renderRuns([run({ status: "failed", error: "boom", cost_usd: null, score: null, blockers: null })]);
+    expect(screen.queryByText(/tok/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — per-run severity breakdown", () => {
+  it("breaks a settled run's findings down by severity beside its total", () => {
+    renderRuns(
+      [run({ run_id: "run-1", status: "done", findings_count: 3, blockers: 2, score: 38 })],
+      new Map([
+        [
+          "run-1",
+          [
+            finding({ id: "f1", severity: "CRITICAL" }),
+            finding({ id: "f2", severity: "CRITICAL" }),
+            finding({ id: "f3", severity: "WARNING" }),
+          ],
+        ],
+      ]),
+    );
+    // The run's own total stays; the breakdown sits next to it.
+    expect(screen.getByText(/3 finding/)).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+  });
+
+  it("renders nothing extra when the map is absent — the prop is optional", () => {
+    renderRuns([run({ run_id: "run-1", status: "done", findings_count: 3, blockers: 2, score: 38 })]);
+    expect(screen.getByText(/3 finding/)).toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("shows that run's findings on hover, scoped to the run", () => {
+    renderRuns(
+      [run({ run_id: "run-1", status: "done", findings_count: 1, blockers: 0, score: 64 })],
+      new Map([["run-1", [finding({ id: "f1", title: "N+1 query in user list endpoint" })]]]),
+    );
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByText("1").parentElement!);
+    const tip = screen.getByRole("tooltip");
+    expect(tip).toHaveTextContent("1 findings in this run");
+    expect(tip).toHaveTextContent("N+1 query in user list endpoint");
   });
 });

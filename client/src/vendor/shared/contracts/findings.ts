@@ -11,6 +11,19 @@ import { z } from 'zod';
 export const Severity = z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']);
 export type Severity = z.infer<typeof Severity>;
 
+/**
+ * A findings tally, one count per severity. Callers must distinguish this object
+ * from `null`: `{0,0,0}` means "reviewed, and clean", `null` means "never
+ * reviewed". Severities outside these three are dropped by the tally, never
+ * bucketed — `findings.severity` is free-form text with no CHECK constraint.
+ */
+export const FindingsBySeverity = z.object({
+  CRITICAL: z.number().int(),
+  WARNING: z.number().int(),
+  SUGGESTION: z.number().int(),
+});
+export type FindingsBySeverity = z.infer<typeof FindingsBySeverity>;
+
 export const FindingCategory = z.enum(['bug', 'security', 'perf', 'style', 'test']);
 export type FindingCategory = z.infer<typeof FindingCategory>;
 

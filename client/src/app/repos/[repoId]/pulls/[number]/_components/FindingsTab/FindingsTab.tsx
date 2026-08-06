@@ -63,6 +63,17 @@ export function FindingsTab({
     [onDelete],
   );
 
+  // Per-run findings for the timeline's severity breakdown. Derived from the
+  // reviews already loaded (each ReviewRecord carries its run_id + findings), so
+  // the timeline costs no extra request.
+  const findingsByRun = React.useMemo(
+    () =>
+      new Map(
+        runs.filter((r) => r.run_id != null).map((r) => [r.run_id as string, r.findings]),
+      ),
+    [runs],
+  );
+
   // Timeline → Review-runs navigation: clicking an agent name in the timeline
   // opens + scrolls to that run's accordion below. The nonce re-triggers the
   // scroll even when the same run is clicked twice.
@@ -131,6 +142,7 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            findingsByRun={findingsByRun}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}

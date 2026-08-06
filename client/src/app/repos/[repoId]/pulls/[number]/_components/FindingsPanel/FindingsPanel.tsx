@@ -1,11 +1,12 @@
-/* FindingsPanel — hide-low-confidence + j/k navigation + FindingCard list,
-   wiring the accept/dismiss action hook (A2). */
+/* FindingsPanel — severity filter + hide-low-confidence + j/k navigation +
+   FindingCard list, wiring the accept/dismiss action hook (A2). */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
-import type { FindingRecord } from "@devdigest/shared";
+import type { FindingRecord, Severity } from "@devdigest/shared";
+import { SeverityCounts, severityTally } from "@/components/severity-counts";
 import { FindingCard } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { KEY_TO_ACTION } from "./constants";
@@ -27,8 +28,23 @@ export function FindingsPanel({
   const action = useFindingAction();
   const [hideLow, setHideLow] = React.useState(false);
   const [focusIdx, setFocusIdx] = React.useState(0);
+  // Filter state is local and per-run on purpose: a PR has many run accordions
+  // and each filters its own findings, which one shared ?severity= cannot express.
+  const [severity, setSeverity] = React.useState<Severity | null>(null);
 
-  const shown = React.useMemo(() => visibleFindings(findings, hideLow), [findings, hideLow]);
+  // Counts describe the run, so they stay put while the filter narrows the list.
+  const counts = React.useMemo(() => severityTally(findings), [findings]);
+  const shown = React.useMemo(
+    () => visibleFindings(findings, hideLow, severity),
+    [findings, hideLow, severity],
+  );
+
+  // A narrower list can leave j/k focus past its end — focusIdx is only clamped
+  // on keypress, so reset it whenever the filter changes.
+  const handleSelectSeverity = React.useCallback((next: Severity | null) => {
+    setSeverity(next);
+    setFocusIdx(0);
+  }, []);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
@@ -48,6 +64,12 @@ export function FindingsPanel({
   return (
     <div>
       <div style={s.toolbar}>
+        <SeverityCounts
+          variant="counters"
+          counts={counts}
+          active={severity}
+          onSelect={handleSelectSeverity}
+        />
         <div style={s.toggleGroup}>
           {t("panel.hideLowConfidence")}
           <Toggle on={hideLow} onChange={setHideLow} size={16} />
