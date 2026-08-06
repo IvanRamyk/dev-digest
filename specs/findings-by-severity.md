@@ -99,7 +99,7 @@ Two states that must never be conflated:
 
 | Value | Meaning | Renders |
 |---|---|---|
-| `null` | never reviewed — no `reviews` row for this PR | `—` |
+| `null` | never reviewed — no surviving `reviews` row for this PR, **runs alone do not count** | `—` |
 | `{CRITICAL:0, WARNING:0, SUGGESTION:0}` | reviewed, and clean | a check, never `—` |
 
 A clean PR must not look like an unreviewed one — that is the whole signal. The
@@ -108,6 +108,15 @@ deleted `587c46a` implementation rendered `—` for both; this fixes it.
 The distinction is carried by a LEFT JOIN from `reviews` to `findings`, so a review
 with zero findings still yields one row (with a null severity) and still creates the
 PR's map entry. Presence of the entry is what makes the value non-null.
+
+**The entry is created by a REVIEW, never by a run.** Once the aggregate is keyed on
+`agent_runs` (below), the obvious reading — "this PR has runs, so it has been
+reviewed" — is wrong: a failed, cancelled, or still-running run writes no `reviews`
+row, so a PR whose every current run produced nothing has never been reviewed and must
+read `—`. Gating the map entry on a run instead of its review reported `{0,0,0}`, i.e.
+a green "clean" check, for a PR whose only run had crashed — while `score` and
+`cost_usd` on the same row correctly read `null`. Fixed 2026-08-06 by gating on
+`reviews.id != null` (`server/src/modules/pulls/routes.ts`).
 
 ### Unknown severities are ignored, never bucketed
 
@@ -255,19 +264,22 @@ different ways on two surfaces. Hover shows the findings; the click still opens 
    agents' contributions are unaffected. Same for `cost_usd`.
 5. A review with `run_id IS NULL` (seeded, or its run row deleted) counts even when
    every run on the PR failed.
-6. A finding whose severity is outside the three known values is ignored by every
+6. A PR that has runs but no surviving review reads `null`, not `{0,0,0}` — it has
+   never been reviewed, so it renders `—` rather than a clean check, consistent with
+   `score` and `cost_usd` on the same row.
+7. A finding whose severity is outside the three known values is ignored by every
    counter and never produces a fourth bucket.
-7. The `FINDINGS` column shows one icon+count per non-zero bucket; clicking anywhere in
+8. The `FINDINGS` column shows one icon+count per non-zero bucket; clicking anywhere in
    the row — chips included — still navigates to the PR.
-8. Hovering the column shows the PR's findings, and the card is not clipped by the
+9. Hovering the column shows the PR's findings, and the card is not clipped by the
    table card's `overflow: hidden` even on the last row.
-9. Clicking `CRITICAL` in a run's toolbar leaves only that run's CRITICAL findings
+10. Clicking `CRITICAL` in a run's toolbar leaves only that run's CRITICAL findings
    visible, leaves the accordion and its `{n} findings` header unchanged, and leaves
    every other run untouched.
-10. Clicking the active severity again restores all of that run's findings.
-11. A run whose findings are all filtered out shows "No findings match" inside its own
+11. Clicking the active severity again restores all of that run's findings.
+12. A run whose findings are all filtered out shows "No findings match" inside its own
    accordion.
-12. Severity filtering and `Hide low confidence` compose: a low-confidence CRITICAL is
+13. Severity filtering and `Hide low confidence` compose: a low-confidence CRITICAL is
     hidden when both are active.
-13. Dismissing a CRITICAL finding does not decrement any CRITICAL counter.
-14. Zero additional model calls and zero new writes — every number is derived on read.
+14. Dismissing a CRITICAL finding does not decrement any CRITICAL counter.
+15. Zero additional model calls and zero new writes — every number is derived on read.

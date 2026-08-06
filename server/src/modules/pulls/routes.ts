@@ -183,10 +183,14 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
     // run therefore also contributes nothing until it settles: mid-review the
     // column goes quiet instead of asserting a stale picture.
     //
-    // The two LEFT JOINs each preserve a distinct "reviewed, and clean" case:
-    // runs→reviews keeps a run whose review has not landed, reviews→findings
-    // keeps a review that found nothing. Unknown severities are dropped by
-    // findingsBySeverity, never bucketed.
+    // The LEFT JOINs each preserve a distinct "reviewed, and clean" case:
+    // runs→reviews lets a run be seen even when its review has not landed,
+    // reviews→findings keeps a review that found nothing. Unknown severities are
+    // dropped by findingsBySeverity, never bucketed.
+    //
+    // A map entry is created only once a REVIEW is seen, never merely a run.
+    // Presence of the entry is what makes the value non-null, and a PR whose runs
+    // all failed has never been reviewed: it must read `—`, not a clean check.
     const findingsByPr = new Map<string, { severity: string }[]>();
     if (prIds.length > 0) {
       const runFindingRows = await container.db
@@ -194,6 +198,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           prId: t.agentRuns.prId,
           agentId: t.agentRuns.agentId,
           runId: t.agentRuns.id,
+          reviewId: t.reviews.id,
           severity: t.findings.severity,
         })
         .from(t.agentRuns)
@@ -214,9 +219,13 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           seenAgents.add(agentKey);
           keptRunIds.add(row.runId);
         }
-        // The entry itself (even when empty) is what makes the value non-null.
+        if (!keptRunIds.has(row.runId)) continue;
+        // Gate on the REVIEW, not the run: a failed / cancelled / running run has
+        // no review, so it must not make the PR look reviewed. A kept run WITH a
+        // review and no findings is the genuine "reviewed, and clean" → {0,0,0}.
+        if (row.reviewId == null) continue;
         if (!findingsByPr.has(row.prId)) findingsByPr.set(row.prId, []);
-        if (keptRunIds.has(row.runId) && row.severity != null) {
+        if (row.severity != null) {
           findingsByPr.get(row.prId)!.push({ severity: row.severity });
         }
       }

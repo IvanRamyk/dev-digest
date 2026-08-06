@@ -506,11 +506,11 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(await countsOf()).toEqual({ CRITICAL: 0, WARNING: 1, SUGGESTION: 0 });
 
     // A run still in flight behaves the same way: no result yet, so no claim.
+    // With BOTH agents' latest runs now review-less, no review survives at all —
+    // so this reads null ("never reviewed"), NOT {0,0,0} ("reviewed, and clean").
+    // A PR whose every current run failed has no review to call clean.
     await run({ agentId: b.id, severities: null, offsetMs: 20_000, status: 'running' });
-    expect(await countsOf()).toEqual({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
-
-    // Reviewed-and-clean, not "never reviewed" — the PR still has runs.
-    expect(await countsOf()).not.toBeNull();
+    expect(await countsOf()).toBeNull();
 
     // A successful re-run brings that agent's findings back.
     await run({ agentId: a.id, severities: ['CRITICAL', 'SUGGESTION'], offsetMs: 30_000 });
@@ -600,6 +600,30 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     };
 
     // Never reviewed → null. A clean PR must not be indistinguishable from this.
+    expect(await countsOf()).toBeNull();
+
+    // A PR with RUNS but no review is still "never reviewed" → null. A run that
+    // failed / was cancelled / is in flight writes no reviews row, and a run on
+    // its own must not make the PR read as reviewed-and-clean: the entry is
+    // created by a REVIEW, never by a run.
+    await pg.handle.db.insert(t.agentRuns).values([
+      {
+        workspaceId,
+        agentId: null,
+        prId: pr.id,
+        provider: 'openai',
+        model: 'gpt-4.1',
+        status: 'failed',
+      },
+      {
+        workspaceId,
+        agentId: null,
+        prId: pr.id,
+        provider: 'openai',
+        model: 'gpt-4.1',
+        status: 'running',
+      },
+    ]);
     expect(await countsOf()).toBeNull();
 
     // A review that found NOTHING → all zeros. The LEFT JOIN is what preserves
