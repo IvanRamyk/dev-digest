@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { Icon, Chip, SEV, type Severity as UiSeverity } from "@devdigest/ui";
 import type { FindingsBySeverity, Severity } from "@devdigest/shared";
 import { SEVERITY_BUCKETS, NO_DATA } from "./constants";
-import { totalOf } from "./helpers";
+import { totalOf } from "@/lib/domain/findings";
 import { s } from "./styles";
 
 export interface SeverityCountsProps {

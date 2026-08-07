@@ -13,6 +13,10 @@ import { RepoProvider } from "./repo-context";
 import { ToastProvider, notify } from "./toast";
 import { ApiError } from "./api";
 
+/* This fallback is deliberately NOT translated (C10's one exception): the cache
+   callbacks below fire outside React rendering, so there is no hook context to
+   read messages from, and it only shows for a thrown non-Error. Anything rendered
+   inside a component goes through useTranslations. */
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return "Something went wrong";

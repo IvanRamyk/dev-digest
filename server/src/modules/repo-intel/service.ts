@@ -17,7 +17,7 @@
  * The constructor takes ONLY a Container. No astgrep / depgraph / tokenizer
  * deps are imported here — those land later and plug into this same shell.
  */
-import type { CodeSymbol, RepoRef } from '@devdigest/shared';
+import type { CodeSymbol, GitClient, RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import { extractEndpoints } from '../../adapters/codeindex/extract.js';
 import {
@@ -26,8 +26,7 @@ import {
   parseSymbols,
   langForFile,
 } from '../../adapters/astgrep/index.js';
-import { readFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { extname } from 'node:path';
 import { RepoIntelRepository, type FullSymbolRow } from './repository.js';
 import type {
   BlastCallerRow,
@@ -101,8 +100,14 @@ const PHANTOM_GLOBALS_ALLOWLIST: ReadonlySet<string> = new Set([
 export class RepoIntelService implements RepoIntel {
   private readonly repo: RepoIntelRepository;
 
-  constructor(private container: Container) {
-    this.repo = new RepoIntelRepository(container.db);
+  /**
+   * `repo` is injectable so the degraded-contract tests can supply a stub data
+   * layer without a live Postgres. Production callers pass the container only
+   * and get the real repository — the override exists because these methods
+   * must NEVER throw, and proving that needs the no-data paths driven directly.
+   */
+  constructor(private container: Container, repo?: RepoIntelRepository) {
+    this.repo = repo ?? new RepoIntelRepository(container.db);
   }
 
   // -------------------------------------------------------------------------
@@ -288,7 +293,7 @@ export class RepoIntelService implements RepoIntel {
       // Detect HTTP routes reachable from any caller file (best-effort, just
       // like the legacy blast service).
       for (const file of callerFiles) {
-        const content = await readClone(repo.clonePath, file);
+        const content = await readClone(this.container.git, repo, file);
         if (!content) continue;
         for (const e of extractEndpoints(content)) endpoints.add(e);
       }
@@ -467,7 +472,7 @@ export class RepoIntelService implements RepoIntel {
     const declaredSymbols = new Map<string, { file: string; kind: string }>();
     for (const file of changedFiles) {
       if (!langForFile(file)) continue;
-      const source = await readClone(repo.clonePath, file);
+      const source = await readClone(this.container.git, repo, file);
       if (source == null) continue;
       try {
         for (const s of parseSymbols(file, source)) {
@@ -511,7 +516,7 @@ export class RepoIntelService implements RepoIntel {
             callerSymbolsByFile.set(r.fromPath, []);
             callerSyms = [];
           } else {
-            const callerSrc = await readClone(repo.clonePath, r.fromPath);
+            const callerSrc = await readClone(this.container.git, repo, r.fromPath);
             if (callerSrc == null) {
               callerSymbolsByFile.set(r.fromPath, []);
               callerSyms = [];
@@ -588,7 +593,7 @@ export class RepoIntelService implements RepoIntel {
       const ext = extname(file).toLowerCase();
       if (!(SUPPORTED_EXT as readonly string[]).includes(ext)) continue;
 
-      const source = await readClone(repo.clonePath, file);
+      const source = await readClone(this.container.git, repo, file);
       if (source == null) continue;
 
       let declared: ReturnType<typeof parseSymbols>;
@@ -759,6 +764,19 @@ function enclosingSymbolName(
   return inFile[0]?.name ?? fromPath.split('/').pop() ?? fromPath;
 }
 
-async function readClone(clonePath: string, file: string): Promise<string | null> {
-  return readFile(join(clonePath, file), 'utf8').catch(() => null);
+/**
+ * Read one file out of a repo's clone, or null when it is missing/unreadable.
+ *
+ * Goes through the GitClient port rather than `node:fs` so this service holds no
+ * filesystem dependency of its own: `GitClient.readFile` resolves the same
+ * `<cloneDir>/<owner>/<name>` path that `clone()` persisted as `repo.clonePath`.
+ * The null-on-failure contract is this module's, not the port's — every caller
+ * treats an unreadable file as "no context" and skips it.
+ */
+function readClone(
+  git: GitClient,
+  repo: { owner: string; name: string },
+  file: string,
+): Promise<string | null> {
+  return git.readFile({ owner: repo.owner, name: repo.name }, file).catch(() => null);
 }

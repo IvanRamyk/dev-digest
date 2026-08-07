@@ -5,12 +5,14 @@
 
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Dropdown, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
-import { AppShell } from "../../../components/app-shell";
-import { AgentCard } from "../_components/AgentCard";
+import { AppShell } from "@/components/app-shell";
+import { AgentCard } from "@/components/agent-card";
 import { AgentEditor } from "./_components/AgentEditor";
-import { useAgents, useAgent, useUpdateAgent } from "../../../lib/hooks/agents";
-import { ApiError } from "../../../lib/api";
+import { useAgents, useAgent, useUpdateAgent } from "@/lib/hooks/agents";
+import { ApiError } from "@/lib/api";
+import { s } from "./styles";
 
 const VALID_TABS = ["config"];
 
@@ -19,22 +21,23 @@ export default function AgentEditorPage() {
   const search = useSearchParams();
   const router = useRouter();
   const { id } = params;
+  const tr = useTranslations("agents");
 
   const { data: agents } = useAgents();
   const { data: agent, isLoading, isError, error, refetch } = useAgent(id);
   const update = useUpdateAgent();
 
   const tab = VALID_TABS.includes(search.get("tab") ?? "") ? search.get("tab")! : "config";
-  const setTab = (t: string) => {
+  const setTab = (next: string) => {
     const sp = new URLSearchParams(search.toString());
-    sp.set("tab", t);
+    sp.set("tab", next);
     router.replace(`/agents/${id}?${sp.toString()}`);
   };
 
   const crumb = [
-    { label: "Skills Lab" },
-    { label: "Agents", href: "/agents" },
-    { label: agent?.name ?? "Agent" },
+    { label: tr("list.breadcrumbLab") },
+    { label: tr("list.breadcrumb"), href: "/agents" },
+    { label: agent?.name ?? tr("editor.agentFallback") },
   ];
 
   if (isError || (!isLoading && !agent)) {
@@ -42,8 +45,8 @@ export default function AgentEditorPage() {
       <AppShell crumb={crumb}>
         <ErrorState
           fullScreen
-          title="Couldn’t load this agent"
-          body={error instanceof ApiError ? error.message : "The agent could not be loaded."}
+          title={tr("editor.loadErrorTitle")}
+          body={error instanceof ApiError ? error.message : tr("editor.loadErrorBody")}
           onRetry={() => refetch()}
         />
       </AppShell>
@@ -52,34 +55,25 @@ export default function AgentEditorPage() {
 
   return (
     <AppShell crumb={crumb}>
-      <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
+      <div style={s.page}>
         {/* left: agent list */}
-        <div
-          style={{
-            width: 280,
-            flexShrink: 0,
-            borderRight: "1px solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-            background: "var(--bg-surface)",
-          }}
-        >
-          <div style={{ padding: "16px 16px 12px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <h1 style={{ fontSize: 18, fontWeight: 700, flex: 1 }}>Agents</h1>
+        <div style={s.sidebar}>
+          <div style={s.sidebarHeader}>
+            <div style={s.sidebarTitleRow}>
+              <h1 style={s.sidebarTitle}>{tr("editor.listTitle")}</h1>
               <Dropdown
                 width={210}
                 align="right"
                 trigger={
                   <Button kind="primary" size="sm" icon="Plus">
-                    Add
+                    {tr("editor.add")}
                   </Button>
                 }
-                items={[{ label: "Create from scratch", icon: "Edit", onClick: () => router.push("/agents") }]}
+                items={[{ label: tr("editor.createFromScratch"), icon: "Edit", onClick: () => router.push("/agents") }]}
               />
             </div>
           </div>
-          <div style={{ flex: 1, overflow: "auto", padding: "0 12px 12px" }}>
+          <div style={s.agentList}>
             {(agents ?? []).map((a) => (
               <AgentCard
                 key={a.id}
@@ -94,26 +88,26 @@ export default function AgentEditorPage() {
 
         {/* editor */}
         {isLoading || !agent ? (
-          <div style={{ flex: 1, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={s.loading}>
             <Skeleton height={24} width={240} />
             <Skeleton height={200} />
           </div>
         ) : (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px 0", flexShrink: 0 }}>
-              <Icon.Cpu size={18} style={{ color: "var(--accent)" }} />
-              <h1 style={{ fontSize: 18, fontWeight: 700 }}>{agent.name}</h1>
+          <div style={s.editorPane}>
+            <div style={s.editorHeader}>
+              <Icon.Cpu size={18} style={s.editorIcon} />
+              <h1 style={s.editorTitle}>{agent.name}</h1>
               <Badge color="var(--text-secondary)" mono>
                 {agent.provider}/{agent.model}
               </Badge>
-              {!agent.enabled && <Badge color="var(--text-muted)">disabled</Badge>}
-              <div style={{ marginLeft: "auto" }}>
+              {!agent.enabled && <Badge color="var(--text-muted)">{tr("editor.disabled")}</Badge>}
+              <div style={s.editorActions}>
                 <Button kind="secondary" size="sm" icon="GitPullRequest" onClick={() => router.push("/")}>
-                  Run on a PR…
+                  {tr("editor.runOnPr")}
                 </Button>
               </div>
             </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+            <div style={s.editorBody}>
               <AgentEditor agent={agent} tab={tab} onTab={setTab} />
             </div>
           </div>

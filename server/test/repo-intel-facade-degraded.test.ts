@@ -11,8 +11,9 @@ import type { IndexState } from '../src/modules/repo-intel/types.js';
  * blast, hooks) downgrade to their pre-T1.3 behavior on these returns; if any
  * method threw or returned malformed shape, every consumer would crash.
  *
- * No Postgres, no clone. The service's `repo` (RepoIntelRepository) is patched
- * to return null/[] so we exercise the degraded paths cleanly.
+ * No Postgres, no clone. A stub data layer returning null/[] is INJECTED through
+ * the service's constructor, so the degraded paths are exercised through the
+ * same seam production uses rather than by patching a private field.
  */
 
 function buildDegradedService(opts: {
@@ -29,15 +30,14 @@ function buildDegradedService(opts: {
       references: async () => [],
     } as never,
   } as never;
-  const svc = new RepoIntelService(container);
-  (svc as unknown as { repo: Record<string, unknown> }).repo = {
+  const repo = {
     getRepoBasics: async () => opts.basics ?? null,
     tryGetIndexState: async () => opts.indexStateRow ?? null,
     getCachedSymbols: async () => [],
     getCachedSymbolsForFiles: async () => [],
     getCachedReferencesTo: async () => [],
-  };
-  return svc;
+  } as unknown as ConstructorParameters<typeof RepoIntelService>[1];
+  return new RepoIntelService(container, repo);
 }
 
 describe('RepoIntel facade — degraded contract (flag off)', () => {

@@ -6,34 +6,25 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, Verdict } from "@devdigest/shared";
+import { useDeleteReview } from "@/lib/hooks/reviews";
+import { VERDICT_META, VERDICT_FALLBACK_COLOR } from "../../constants";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
-import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
-
-const VERDICT_COLOR: Record<string, string> = {
-  request_changes: "var(--crit)",
-  comment: "var(--warn)",
-  approve: "var(--ok)",
-};
+import { s } from "./styles";
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
-export function ReviewRunAccordion({
-  review,
-  prId,
-  defaultOpen = false,
-  repoFullName,
-  headSha,
-  targetRunId = null,
-  targetNonce = 0,
-}: {
+export interface ReviewRunAccordionProps {
   review: ReviewRecord;
   prId: string;
+  /** Invalidation scope — deleting a review changes the PR list's counters. */
+  repoId: string;
   defaultOpen?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
@@ -41,7 +32,19 @@ export function ReviewRunAccordion({
    *  (driven from the Timeline: clicking an agent name navigates here). */
   targetRunId?: string | null;
   targetNonce?: number;
-}) {
+}
+
+export function ReviewRunAccordion({
+  review,
+  prId,
+  repoId,
+  defaultOpen = false,
+  repoFullName,
+  headSha,
+  targetRunId = null,
+  targetNonce = 0,
+}: ReviewRunAccordionProps) {
+  const t = useTranslations("prReview");
   const [open, setOpen] = React.useState(defaultOpen);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
@@ -51,23 +54,21 @@ export function ReviewRunAccordion({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRunId, targetNonce, review.run_id]);
-  const del = useDeleteReview(prId);
+  const del = useDeleteReview(prId, repoId);
   const findings = review.findings;
   const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
-  const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
+  // Verdict colour comes from the shared VERDICT_META (C13) — a local copy here is
+  // how "comment" once rendered var(--warn) while the banner used var(--info).
+  const verdictColor = review.verdict
+    ? (VERDICT_META[review.verdict as Verdict]?.c ?? VERDICT_FALLBACK_COLOR)
+    : VERDICT_FALLBACK_COLOR;
+  const agentName = review.agent_name ?? t("reviewRun.agentFallback");
 
   return (
     <div
       ref={rootRef}
       id={review.run_id ? `review-run-${review.run_id}` : undefined}
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        background: "var(--bg-surface)",
-        marginBottom: 14,
-        overflow: "hidden",
-        scrollMarginTop: 16,
-      }}
+      style={s.root}
     >
       <div
         role="button"
@@ -76,67 +77,49 @@ export function ReviewRunAccordion({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") setOpen((o) => !o);
         }}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "13px 16px",
-          cursor: "pointer",
-          color: "var(--text-primary)",
-        }}
+        style={s.header}
       >
-        <Icon.Cpu size={15} style={{ color: "var(--text-muted)" }} />
-        <span style={{ fontWeight: 600, fontSize: 14 }}>{review.agent_name ?? "Agent"}</span>
+        <Icon.Cpu size={15} style={s.agentIcon} />
+        <span style={s.agentName}>{agentName}</span>
         {review.verdict && (
           <Badge color={verdictColor} bg="transparent">
-            {review.verdict.replace("_", " ")}
+            {t(`verdict.${VERDICT_META[review.verdict as Verdict]?.labelKey ?? "comment"}`)}
           </Badge>
         )}
-        <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-          {findings.length} finding{findings.length === 1 ? "" : "s"}
-          {blockers > 0 ? ` · ${blockers} blocker${blockers === 1 ? "" : "s"}` : ""}
+        <span style={s.counts}>
+          {t("reviewRun.findingCount", { count: findings.length })}
+          {blockers > 0 ? t("reviewRun.blockers", { count: blockers }) : ""}
         </span>
-        <span style={{ flex: 1 }} />
+        <span style={s.spacer} />
         {review.score != null && (
           <Badge mono color="var(--text-secondary)">
             {review.score}
           </Badge>
         )}
-        <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        <span className="mono" style={s.when}>
           {formatWhen(review.created_at)}
         </span>
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete this "${review.agent_name ?? "agent"}" review run and its findings?`)) {
+            if (window.confirm(t("reviewRun.deleteConfirm", { agent: agentName }))) {
               del.mutate(review.id);
             }
           }}
           disabled={del.isPending}
-          title="Delete this review run"
-          aria-label="Delete this review run"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: del.isPending ? "not-allowed" : "pointer",
-            color: "var(--text-muted)",
-            display: "inline-flex",
-            padding: 4,
-          }}
+          title={t("timeline.deleteReviewRun")}
+          aria-label={t("timeline.deleteReviewRun")}
+          style={s.deleteBtn(del.isPending)}
         >
-          <Icon.Trash size={14} style={del.isPending ? { animation: "ddspin 1s linear infinite" } : undefined} />
+          <Icon.Trash size={14} style={del.isPending ? s.spinning : undefined} />
         </button>
-        <Icon.ChevronDown
-          size={16}
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s", color: "var(--text-muted)" }}
-        />
+        <Icon.ChevronDown size={16} style={s.chevron(open)} />
       </div>
 
       {open && (
-        <div style={{ padding: "0 16px 16px" }}>
+        <div style={s.body}>
           {review.verdict && (
-            <div style={{ marginBottom: 16 }}>
+            <div style={s.verdictWrap}>
               <VerdictBanner
                 verdict={review.verdict as Verdict}
                 summary={review.summary}
@@ -150,6 +133,7 @@ export function ReviewRunAccordion({
           <FindingsPanel
             findings={findings}
             prId={prId}
+            repoId={repoId}
             repoFullName={repoFullName}
             headSha={headSha}
           />

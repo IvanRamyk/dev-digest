@@ -58,20 +58,20 @@ function renderWithIntl(ui: React.ReactElement) {
 
 describe("FindingsPanel (smoke)", () => {
   it("renders the toolbar + a finding card", () => {
-    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" repoId="repo1" />);
     expect(screen.getByText("Hide low confidence")).toBeInTheDocument();
     expect(screen.getByText("Hardcoded secret")).toBeInTheDocument();
   });
 
   it("shows the empty state when nothing matches", () => {
-    renderWithIntl(<FindingsPanel findings={[]} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={[]} prId="pr1" repoId="repo1" />);
     expect(screen.getByText("No findings match")).toBeInTheDocument();
   });
 });
 
 describe("FindingsPanel severity filter", () => {
   it("counts this run's own findings in the toolbar", () => {
-    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" repoId="repo1" />);
     expect(screen.getByRole("button", { name: /Critical/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Warning/ })).toBeInTheDocument();
     // No SUGGESTION in this run, so no chip for it.
@@ -79,7 +79,7 @@ describe("FindingsPanel severity filter", () => {
   });
 
   it("shows only the picked severity, and restores everything when toggled off", () => {
-    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" repoId="repo1" />);
     fireEvent.click(screen.getByRole("button", { name: /Critical/ }));
     expect(screen.getByText("Hardcoded secret")).toBeInTheDocument();
     expect(screen.queryByText("N+1 query in user list")).not.toBeInTheDocument();
@@ -91,13 +91,13 @@ describe("FindingsPanel severity filter", () => {
   });
 
   it("keeps the counters intact while the list is filtered — they describe the run", () => {
-    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" repoId="repo1" />);
     fireEvent.click(screen.getByRole("button", { name: /Critical/ }));
     expect(screen.getByRole("button", { name: /Warning/ })).toBeInTheDocument();
   });
 
   it("composes with hide-low-confidence as an AND", () => {
-    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" repoId="repo1" />);
     // The only WARNING is low-confidence, so both cuts together empty the list.
     fireEvent.click(screen.getByRole("button", { name: /Warning/ }));
     expect(screen.getByText("N+1 query in user list")).toBeInTheDocument();

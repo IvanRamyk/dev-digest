@@ -11,11 +11,3 @@ export const POPOVER_OFFSET = 6;
 
 /** Rationale is a preview here, not the whole thing — the card links to the PR. */
 export const RATIONALE_MAX_CHARS = 150;
-
-/** Sort weight per severity (lower = shown first), worst finding at the top. */
-export const SEVERITY_ORDER: Record<string, number> = {
-  CRITICAL: 0,
-  WARNING: 1,
-  SUGGESTION: 2,
-  INFO: 3,
-};

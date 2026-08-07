@@ -42,13 +42,12 @@ function makeService(opts: { basics: Basics | null; state?: IndexState | null; g
 
   const container = {
     git: opts.git,
-    db: {}, // never queried — service.repo is overridden below
+    db: {}, // never queried — the stub repository is injected below
     depgraph: { buildEdges: async () => [] },
     tokenizer: { count: (text: string) => Math.ceil(text.length / 4) },
   } as unknown as Container;
 
-  const service = new RepoIntelService(container);
-  (service as unknown as { repo: RepoIntelRepository }).repo = repo;
+  const service = new RepoIntelService(container, repo);
   return { service, touched };
 }
 

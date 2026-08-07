@@ -1,9 +1,12 @@
-/** Cost/token formatting for the run cost badge. Shared by all three surfaces
-    (PR list column, Agent runs timeline, run trace drawer) so the same run never
-    renders two different-looking numbers. */
+/* domain/cost.ts — run cost and token formatting. Pure.
+
+   Shared by every surface that shows a price (PR list column, agent runs
+   timeline, run trace drawer) so the same run never renders two different-looking
+   numbers. See client/INSIGHTS.md 2026-08-05 for why the numeric handling here is
+   the way it is — toFixed(2) and `?? 0` are both wrong, for different reasons. */
 
 /** Em-dash used across the app for "no data" (see PRRow's unreviewed score). */
-const NO_DATA = "—";
+export const NO_DATA = "—";
 
 /**
  * USD cost, at 3 significant figures.
@@ -15,6 +18,7 @@ const NO_DATA = "—";
  *
  * null/undefined → "—". A run with no cost is UNKNOWN (unpriced model, or it
  * never finished), not free. 0 is real data — a free model — and renders "$0".
+ * Collapsing the two with `?? 0` labels a failed run "free".
  */
 export function formatCost(usd: number | null | undefined): string {
   if (usd == null) return NO_DATA;

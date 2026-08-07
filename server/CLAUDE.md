@@ -15,6 +15,8 @@ in `constants.ts` · pure transforms in `helpers.ts`.
 
 - Starting work here → read `INSIGHTS.md` first (dated history, not rules — this file
   wins on any conflict)
+- Adding a module, service, repository, adapter, or port → read
+  `.claude/skills/onion-architecture/SKILL.md` (ring map, inward-dependency rules)
 - Adding a module → read the header of `src/modules/index.ts` (static registry:
   one import + one entry; registration is deliberately not filesystem autoload)
 - Adding a table or column → read the header of `src/db/schema.ts`, then `pnpm db:generate`

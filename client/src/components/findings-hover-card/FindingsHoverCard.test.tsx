@@ -11,7 +11,8 @@ import type { FindingRecord } from "@devdigest/shared";
 import messages from "../../../messages/en/prReview.json";
 import { FindingsHoverCard } from "./FindingsHoverCard";
 import { POPOVER_MAX_ITEMS } from "./constants";
-import { rationalePreview, sortBySeverity, fileLabel } from "./helpers";
+import { sortBySeverity } from "@/lib/domain/findings";
+import { rationalePreview, fileLabel } from "./helpers";
 
 afterEach(cleanup);
 

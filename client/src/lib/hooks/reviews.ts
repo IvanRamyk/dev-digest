@@ -6,6 +6,7 @@ import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
 import { notify } from "../toast";
+import { qk } from "../query-keys";
 import type {
   FindingActionKind,
   PrReviewComment,
@@ -27,7 +28,7 @@ export interface ActiveRun {
    Survives reloads/devices; polls while anything is running so it self-clears. */
 export function usePrActiveRuns(prId: string | null | undefined) {
   return useQuery({
-    queryKey: ["pr-active-runs", prId],
+    queryKey: qk.pr(prId).activeRuns,
     queryFn: () => api.get<ActiveRun[]>(`/pulls/${prId}/runs/active`),
     enabled: !!prId,
     refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? 4000 : false),
@@ -43,7 +44,7 @@ export function usePrActiveRuns(prId: string | null | undefined) {
    warms the same cache entry the detail page then reads. */
 export function usePrRuns(prId: string | null | undefined, enabled = true) {
   return useQuery({
-    queryKey: ["pr-runs", prId],
+    queryKey: qk.pr(prId).runs,
     queryFn: () => api.get<RunSummary[]>(`/pulls/${prId}/runs`),
     enabled: !!prId && enabled,
     refetchInterval: (query) =>
@@ -59,39 +60,49 @@ export function usePrRuns(prId: string | null | undefined, enabled = true) {
    so hovering warms the same cache entry the detail page then reads. */
 export function usePrReviews(prId: string | null | undefined, enabled = true) {
   return useQuery({
-    queryKey: ["reviews", prId],
+    queryKey: qk.pr(prId).reviews,
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
     enabled: !!prId && enabled,
   });
 }
 
 /** Delete one run from the PR's run history (+ its trace). */
-export function useDeleteRun(prId: string | null | undefined) {
+export function useDeleteRun(prId: string | null | undefined, repoId?: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (runId: string) => api.del<{ ok: boolean }>(`/runs/${runId}`),
     // Deleting a run also deletes the review it produced (server-side), so drop
     // both the timeline and the Review Runs list from cache.
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
-      qc.invalidateQueries({ queryKey: ["reviews", prId] });
+      // One prefix covers runs + activeRuns + reviews + detail for this PR.
+      qc.invalidateQueries({ queryKey: qk.pr(prId).all });
+      // The PR list renders per-row severity counters and cost from these runs.
+      if (repoId) qc.invalidateQueries({ queryKey: qk.repos.pulls(repoId) });
     },
   });
 }
 
 /** Request cancellation of an in-flight run (takes effect at the next step). */
-export function useCancelRun() {
+export function useCancelRun(prId: string | null | undefined) {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (runId: string) => api.post<{ ok: boolean }>(`/runs/${runId}/cancel`),
+    // Cancelling changes the active-run list, the run history AND the review the
+    // run would have produced — one prefix covers all three (C15). Without this
+    // a cancelled run keeps rendering as "running" until a poll happens to fire.
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.pr(prId).all }),
   });
 }
 
 /** Delete a whole review run (one agent's pass) + its findings. */
-export function useDeleteReview(prId: string | null | undefined) {
+export function useDeleteReview(prId: string | null | undefined, repoId?: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (reviewId: string) => api.del<{ ok: boolean }>(`/reviews/${reviewId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reviews", prId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.pr(prId).reviews });
+      if (repoId) qc.invalidateQueries({ queryKey: qk.repos.pulls(repoId) });
+    },
   });
 }
 
@@ -99,7 +110,7 @@ export function useDeleteReview(prId: string | null | undefined) {
 /** Existing GitHub PR review comments, fetched live. */
 export function usePrComments(prId: string | null | undefined) {
   return useQuery({
-    queryKey: ["pr-comments", prId],
+    queryKey: qk.pr(prId).comments,
     queryFn: () => api.get<PrReviewComment[]>(`/pulls/${prId}/comments`),
     enabled: !!prId,
   });
@@ -119,7 +130,7 @@ export function useCreatePrComment(prId: string | null | undefined) {
   return useMutation({
     mutationFn: (input: CreateCommentInput) =>
       api.post<PrReviewComment>(`/pulls/${prId}/comments`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pr-comments", prId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.pr(prId).comments }),
   });
 }
 
@@ -138,8 +149,10 @@ export function useRunReview() {
         ...(agentId ? { agentId } : {}),
         ...(all ? { all } : {}),
       }),
+    // Starting a review creates a run row, so the active-run list and the run
+    // history change too — not just the reviews (C15).
     onSuccess: (_d, { prId }) => {
-      qc.invalidateQueries({ queryKey: ["reviews", prId] });
+      qc.invalidateQueries({ queryKey: qk.pr(prId).all });
     },
   });
 }
@@ -152,19 +165,23 @@ export function useFindingAction() {
       findingId,
       action,
       reply,
-      prId: _prId,
     }: {
       findingId: string;
       action: FindingActionKind;
       reply?: string;
+      /** Invalidation-only: pass them and the caches refresh (C15). */
       prId?: string;
+      repoId?: string;
     }) =>
       api.post<{ finding: ReviewRecord["findings"][number]; memoryId?: string }>(
         `/findings/${findingId}/${action}`,
         reply ? { reply } : undefined,
       ),
-    onSuccess: (_d, { prId }) => {
-      if (prId) qc.invalidateQueries({ queryKey: ["reviews", prId] });
+    // Accept/dismiss changes the finding's state and therefore the PR list's
+    // severity counters. repoId is optional only because not every caller has it.
+    onSuccess: (_d, { prId, repoId }) => {
+      if (prId) qc.invalidateQueries({ queryKey: qk.pr(prId).reviews });
+      if (repoId) qc.invalidateQueries({ queryKey: qk.repos.pulls(repoId) });
     },
   });
 }
@@ -173,11 +190,24 @@ export function useFindingAction() {
  * Subscribe to a run's SSE event stream. Returns the accumulated RunEvents and a
  * `running` flag (true until the stream closes). Live status for the
  * RunReviewDropdown / Live Log. Multiple runIds are subscribed in parallel.
+ *
+ * When the last stream closes the run has settled, so this hook invalidates the
+ * PR's caches itself (C15): a settled run changes the active-run list, the run
+ * history, the reviews it produced, and the PR list's severity counters. Callers
+ * pass `prId`/`repoId` for that; a caller that only wants the log can omit them.
  */
-export function useRunEvents(runIds: string[]) {
+export function useRunEvents(
+  runIds: string[],
+  scope?: { prId?: string | null; repoId?: string | null },
+) {
   const [events, setEvents] = React.useState<RunEvent[]>([]);
   const [running, setRunning] = React.useState(false);
   const key = runIds.join(",");
+  const qc = useQueryClient();
+  // Read scope through a ref so a new object literal per render does not
+  // re-subscribe the EventSources — `key` is the only real dependency.
+  const scopeRef = React.useRef(scope);
+  scopeRef.current = scope;
 
   React.useEffect(() => {
     if (runIds.length === 0) return;
@@ -209,7 +239,13 @@ export function useRunEvents(runIds: string[]) {
       es.onerror = () => {
         es.close();
         open -= 1;
-        if (open <= 0) setRunning(false);
+        if (open <= 0) {
+          setRunning(false);
+          // Every stream closed → the runs have settled. Refresh what they wrote.
+          const { prId, repoId } = scopeRef.current ?? {};
+          if (prId) qc.invalidateQueries({ queryKey: qk.pr(prId).all });
+          if (repoId) qc.invalidateQueries({ queryKey: qk.repos.pulls(repoId) });
+        }
       };
       sources.push(es);
     }
