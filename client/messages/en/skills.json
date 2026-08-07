@@ -4,6 +4,8 @@
     "crumbSkills": "Skills",
     "heading": "Skills",
     "addSkill": "Add Skill",
+    "createFromScratch": "Create from scratch",
+    "import": "Import",
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
     "menu": {
@@ -30,14 +32,62 @@
       "body": "It may have been deleted."
     }
   },
-  "drawer": {
-    "title": "Add a skill",
-    "subtitle": "Import from a file, a URL, or search vetted community skills",
+  "editor": {
+    "loadErrorTitle": "Couldn’t load this skill",
+    "loadErrorBody": "The skill could not be loaded.",
+    "skillFallback": "Skill",
+    "listTitle": "Skills",
+    "add": "Add",
+    "disabled": "disabled",
     "tabs": {
-      "file": "From file",
-      "url": "From URL",
-      "community": "Community"
+      "config": "Config",
+      "preview": "Preview",
+      "versions": "Versions"
     },
+    "config": {
+      "title": "Configuration",
+      "enabled": "Enabled",
+      "name": "Name",
+      "description": "Description",
+      "descriptionHint": "The description is the skill's interface — write it imperatively.",
+      "type": "Type",
+      "body": "Skill body (Markdown)",
+      "tokenCount": "~{count} tokens",
+      "unsaved": "Unsaved changes",
+      "version": "v{version}",
+      "save": "Save skill",
+      "saving": "Saving…",
+      "saved": "Saved (v{version})",
+      "savedToast": "Skill saved (v{version})"
+    },
+    "preview": {
+      "caption": "Rendered as the reviewing agent receives it"
+    },
+    "versions": {
+      "empty": "No earlier versions yet.",
+      "current": "current",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "restored": "Restored v{version} (saved as v{newVersion})",
+      "diffTitle": "Compare with current"
+    }
+  },
+  "drawer": {
+    "title": "Import a skill",
+    "subtitle": "Upload a .md file or a .zip — nothing is executed",
+    "dropzone": "Drop a .md or .zip file here, or click to browse",
+    "chooseFile": "Choose file",
+    "previewing": "Reading file…",
+    "previewFailed": "Could not read this file",
+    "skippedTitle": "Not imported ({count})",
+    "skippedReason": {
+      "not_processed": "not processed",
+      "unsafe_path": "unsafe path"
+    },
+    "willLandDisabled": "Imported skills land disabled until you vet and enable them.",
+    "cancel": "Cancel",
+    "save": "Save skill",
+    "saving": "Saving…",
     "importFailed": "Import failed"
   },
   "file": {

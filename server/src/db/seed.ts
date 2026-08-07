@@ -6,6 +6,8 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -211,13 +213,113 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Flags uncovered branches, over-mocking, weak assertions, and flake sources.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description: 'Catches breaking route/DTO signature changes: status codes, nullability, shape drift.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
+  const agentIdByName = new Map<string, string>();
   for (const a of seedAgents) {
     const [existing] = await db
       .select()
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
-    if (!existing) await db.insert(t.agents).values(a);
+    if (existing) {
+      agentIdByName.set(a.name, existing.id);
+    } else {
+      const [created] = await db.insert(t.agents).values(a).returning();
+      agentIdByName.set(a.name, created!.id);
+    }
+  }
+
+  // ---- L02 — seeded skills, bound to the two new agents ----
+  // Skills Lab starts non-empty so `agent_skills` is exercised straight after
+  // `pnpm db:seed`; the "at least one skill arrives by import" requirement is
+  // satisfied by hand in the UI, not here (see specs/skills.md).
+  const seedSkills: Array<{
+    values: typeof t.skills.$inferInsert;
+    boundTo: string[];
+  }> = [
+    {
+      values: {
+        workspaceId,
+        name: 'test-coverage-rubric',
+        description: 'Scores whether new logic ships with tests that cover its meaningful branches.',
+        type: 'rubric',
+        source: 'manual',
+        body: '## Test coverage rubric\nFor every new conditional, error path, or edge case in the diff, require a test that exercises it. Flag the specific untested branch — not "needs more tests" in general.',
+        enabled: true,
+      },
+      boundTo: ['Test Quality Reviewer'],
+    },
+    {
+      values: {
+        workspaceId,
+        name: 'mocking-smells',
+        description: 'House convention: do not mock the unit under test or over-mock its dependencies.',
+        type: 'convention',
+        source: 'manual',
+        body: '## Mocking smells\nNever mock the exact function/module a test is meant to verify. Prefer a real DB-backed `*.it.test.ts` over mocking persistence when the behavior under test IS the persistence.',
+        enabled: true,
+      },
+      boundTo: ['Test Quality Reviewer'],
+    },
+    {
+      values: {
+        workspaceId,
+        name: 'api-compat-rules',
+        description: 'House convention: additive contract changes only, unless explicitly versioned.',
+        type: 'convention',
+        source: 'manual',
+        body: '## API compatibility rules\nA route or shared DTO change must be additive (new optional field, new route) unless the PR explicitly calls out and versions a breaking change. Flag any removed/renamed field, changed status code, or newly-required field.',
+        enabled: true,
+      },
+      boundTo: ['API Contract Reviewer'],
+    },
+  ];
+
+  const nextOrderByAgent = new Map<string, number>();
+  for (const s of seedSkills) {
+    const [existing] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.values.name)));
+    let skillId: string;
+    if (existing) {
+      skillId = existing.id;
+    } else {
+      const [created] = await db.insert(t.skills).values(s.values).returning();
+      skillId = created!.id;
+      await db.insert(t.skillVersions).values({ skillId, version: 1, body: s.values.body });
+    }
+    for (const agentName of s.boundTo) {
+      const agentId = agentIdByName.get(agentName);
+      if (!agentId) continue;
+      const order = nextOrderByAgent.get(agentId) ?? 0;
+      nextOrderByAgent.set(agentId, order + 1);
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId, skillId, order })
+        .onConflictDoNothing();
+    }
   }
 
   return { workspaceId, userId };

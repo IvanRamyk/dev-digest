@@ -21,6 +21,14 @@ export const qk = {
   agents: {
     all: ["agents"] as const,
     detail: (id: string | null | undefined) => ["agents", "detail", id] as const,
+    skills: (id: string | null | undefined) => ["agents", "detail", id, "skills"] as const,
+  },
+
+  // ---- Skills ----
+  skills: {
+    all: ["skills"] as const,
+    detail: (id: string | null | undefined) => ["skills", "detail", id] as const,
+    versions: (id: string | null | undefined) => ["skills", "detail", id, "versions"] as const,
   },
 
   // ---- Repos and their sub-resources ----
