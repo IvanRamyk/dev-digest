@@ -23,10 +23,11 @@ const SKILLS: Skill[] = [
 ];
 
 const toggle = vi.fn();
+const createSkill = vi.fn().mockResolvedValue({ id: "sk-new" });
 vi.mock("@/lib/hooks/skills", () => ({
   useSkills: () => ({ data: SKILLS, isLoading: false, isError: false, refetch: vi.fn() }),
   useUpdateSkill: () => ({ mutate: toggle }),
-  useCreateSkill: () => ({ mutateAsync: vi.fn() }),
+  useCreateSkill: () => ({ mutateAsync: createSkill }),
 }));
 
 vi.mock("@/components/app-shell", () => ({
@@ -54,5 +55,23 @@ describe("SkillsView (smoke)", () => {
 
     fireEvent.click(card);
     expect(push).toHaveBeenCalledWith("/skills/sk1?tab=config");
+  });
+
+  /* `POST /skills` enforces `body.min(1)`; posting "" returned a 400
+     "Request validation failed" instead of opening the editor. */
+  it("creates a from-scratch skill with a non-empty name and body", async () => {
+    renderWithIntl();
+
+    fireEvent.click(screen.getByText(messages.page.addSkill));
+    fireEvent.click(screen.getByText(messages.page.createFromScratch));
+
+    await vi.waitFor(() =>
+      expect(createSkill).toHaveBeenCalledWith({
+        name: expect.stringMatching(/\S/),
+        body: expect.stringMatching(/\S/),
+      }),
+    );
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/skills/sk-new?tab=config"));
   });
 });

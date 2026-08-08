@@ -6,6 +6,10 @@
     "addSkill": "Add Skill",
     "createFromScratch": "Create from scratch",
     "import": "Import",
+    "newSkill": {
+      "name": "Untitled skill",
+      "body": "# Untitled skill\n\nDescribe the rule this skill enforces, then list the concrete checks the reviewing agent should apply.\n"
+    },
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
     "menu": {

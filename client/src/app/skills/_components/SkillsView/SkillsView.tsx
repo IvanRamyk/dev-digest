@@ -25,8 +25,13 @@ export function SkillsView() {
 
   const list = filterSkills(skills ?? [], search);
 
+  /* The body must be non-empty: `POST /skills` requires `body.min(1)`, and a skill
+     with no body would inject an empty rule block into the agent's prompt. */
   const createFromScratch = async () => {
-    const skill = await create.mutateAsync({ name: t("page.heading"), body: "" });
+    const skill = await create.mutateAsync({
+      name: t("page.newSkill.name"),
+      body: t("page.newSkill.body"),
+    });
     router.push(`/skills/${skill.id}?tab=config`);
   };
 
