@@ -6,15 +6,20 @@
 import React from "react";
 
 type ToastKind = "success" | "error" | "info";
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastApi {
-  toast: (message: string, kind?: ToastKind) => void;
-  success: (m: string) => void;
+  toast: (message: string, kind?: ToastKind, action?: ToastAction) => void;
+  success: (m: string, action?: ToastAction) => void;
   error: (m: string) => void;
   info: (m: string) => void;
 }
@@ -29,11 +34,11 @@ export function useToast(): ToastApi {
 
 /* Module-level bridge so non-React code (e.g. the React Query cache) can raise
    toasts without the hook. The mounted <ToastProvider> registers its pusher. */
-type Pusher = (message: string, kind?: ToastKind) => void;
+type Pusher = (message: string, kind?: ToastKind, action?: ToastAction) => void;
 let activePusher: Pusher | null = null;
 export const notify = {
-  toast: (m: string, k?: ToastKind) => activePusher?.(m, k),
-  success: (m: string) => activePusher?.(m, "success"),
+  toast: (m: string, k?: ToastKind, action?: ToastAction) => activePusher?.(m, k, action),
+  success: (m: string, action?: ToastAction) => activePusher?.(m, "success", action),
   error: (m: string) => activePusher?.(m, "error"),
   info: (m: string) => activePusher?.(m, "info"),
 };
@@ -48,17 +53,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = React.useState<Toast[]>([]);
   const seq = React.useRef(1);
 
-  const push = React.useCallback((message: string, kind: ToastKind = "info") => {
+  const push = React.useCallback((message: string, kind: ToastKind = "info", action?: ToastAction) => {
     const id = seq.current++;
-    setItems((prev) => [...prev, { id, kind, message }]);
-    // auto-dismiss after 4s
-    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 4000);
+    setItems((prev) => [...prev, { id, kind, message, action }]);
+    // auto-dismiss after 4s (6s when there's an action to give it time to be clicked)
+    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), action ? 6000 : 4000);
   }, []);
 
   const api = React.useMemo<ToastApi>(
     () => ({
       toast: push,
-      success: (m) => push(m, "success"),
+      success: (m, action) => push(m, "success", action),
       error: (m) => push(m, "error"),
       info: (m) => push(m, "info"),
     }),
@@ -111,6 +116,26 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             >
               <span style={{ color: c.border, fontWeight: 700 }}>{c.icon}</span>
               <span style={{ flex: 1 }}>{t.message}</span>
+              {t.action && (
+                <button
+                  onClick={() => {
+                    t.action!.onClick();
+                    setItems((prev) => prev.filter((x) => x.id !== t.id));
+                  }}
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--border-strong)",
+                    borderRadius: 5,
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    padding: "3px 8px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 onClick={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}
                 style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 16 }}
