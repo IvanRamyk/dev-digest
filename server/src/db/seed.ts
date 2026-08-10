@@ -6,6 +6,8 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -211,13 +213,205 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Flags uncovered branches, over-mocking, weak assertions, and flake sources.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description: 'Catches breaking route/DTO signature changes: status codes, nullability, shape drift.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
+  const agentIdByName = new Map<string, string>();
   for (const a of seedAgents) {
     const [existing] = await db
       .select()
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
-    if (!existing) await db.insert(t.agents).values(a);
+    if (existing) {
+      agentIdByName.set(a.name, existing.id);
+    } else {
+      const [created] = await db.insert(t.agents).values(a).returning();
+      agentIdByName.set(a.name, created!.id);
+    }
+  }
+
+  // ---- L02 — seeded skills, bound to the two new agents ----
+  // Skills Lab starts non-empty so `agent_skills` is exercised straight after
+  // `pnpm db:seed`; the "at least one skill arrives by import" requirement is
+  // satisfied by hand in the UI, not here (see specs/skills.md).
+  const seedSkills: Array<{
+    values: typeof t.skills.$inferInsert;
+    boundTo: string[];
+  }> = [
+    {
+      values: {
+        workspaceId,
+        name: 'test-coverage-rubric',
+        description: 'Scores whether new logic ships with tests that cover its meaningful branches.',
+        type: 'rubric',
+        source: 'manual',
+        body: '## Test coverage rubric\nFor every new conditional, error path, or edge case in the diff, require a test that exercises it. Flag the specific untested branch — not "needs more tests" in general.',
+        enabled: true,
+      },
+      boundTo: ['Test Quality Reviewer'],
+    },
+    {
+      values: {
+        workspaceId,
+        name: 'mocking-smells',
+        description: 'House convention: do not mock the unit under test or over-mock its dependencies.',
+        type: 'convention',
+        source: 'manual',
+        body: '## Mocking smells\nNever mock the exact function/module a test is meant to verify. Prefer a real DB-backed `*.it.test.ts` over mocking persistence when the behavior under test IS the persistence.',
+        enabled: true,
+      },
+      boundTo: ['Test Quality Reviewer'],
+    },
+    {
+      values: {
+        workspaceId,
+        name: 'api-compat-rules',
+        description: 'House convention: additive contract changes only, unless explicitly versioned.',
+        type: 'convention',
+        source: 'manual',
+        body: '## API compatibility rules\nA route or shared DTO change must be additive (new optional field, new route) unless the PR explicitly calls out and versions a breaking change. Flag any removed/renamed field, changed status code, or newly-required field.',
+        enabled: true,
+      },
+      boundTo: ['API Contract Reviewer'],
+    },
+  ];
+
+  const nextOrderByAgent = new Map<string, number>();
+  for (const s of seedSkills) {
+    const [existing] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.values.name)));
+    let skillId: string;
+    if (existing) {
+      skillId = existing.id;
+    } else {
+      const [created] = await db.insert(t.skills).values(s.values).returning();
+      skillId = created!.id;
+      await db.insert(t.skillVersions).values({ skillId, version: 1, body: s.values.body });
+    }
+    for (const agentName of s.boundTo) {
+      const agentId = agentIdByName.get(agentName);
+      if (!agentId) continue;
+      const order = nextOrderByAgent.get(agentId) ?? 0;
+      nextOrderByAgent.set(agentId, order + 1);
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId, skillId, order })
+        .onConflictDoNothing();
+    }
+  }
+
+  // ---- L03 — a seeded conventions scan for acme/payments-api ----
+  // The non-empty state (accepted/pending, config/model, every verification
+  // kind) is otherwise unreachable without an API key — needed for the
+  // conventions e2e flow, which never calls a real model.
+  let [scan] = await db.select().from(t.conventionScans).where(eq(t.conventionScans.repoId, repoId));
+  if (!scan) {
+    [scan] = await db
+      .insert(t.conventionScans)
+      .values({
+        workspaceId,
+        repoId,
+        status: 'done',
+        sampleFileCount: 24,
+        batchCount: 3,
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        tokensIn: 4820,
+        tokensOut: 610,
+        costUsd: 0.014,
+        candidatesFound: 3,
+        candidatesKept: 3,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      })
+      .returning();
+  }
+  const scanId = scan!.id;
+
+  const seedConventions: Array<typeof t.conventions.$inferInsert> = [
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'chokepoint-redis-client',
+      rule: "All Redis access goes through `src/lib/redis.ts` — no other module imports the redis client directly.",
+      category: 'structure',
+      status: 'accepted',
+      accepted: true,
+      source: 'model',
+      evidencePath: 'src/lib/redis.ts',
+      evidenceStartLine: 1,
+      evidenceEndLine: 12,
+      evidenceSnippet: "import Redis from 'ioredis';\n\nexport const redis = new Redis(process.env.REDIS_URL);",
+      verification: 'pattern',
+      supportCount: 8,
+      violationCount: 0,
+      confidence: 8 / 9,
+    },
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'role-contract-handler-result',
+      rule: 'Route handlers return `Result<T, ApiError>` and never throw for an expected failure.',
+      category: 'api',
+      status: 'pending',
+      accepted: false,
+      source: 'model',
+      evidencePath: 'src/routes/charges.ts',
+      evidenceStartLine: 14,
+      evidenceEndLine: 20,
+      evidenceSnippet:
+        'export async function createCharge(req: ChargeRequest): Promise<Result<Charge, ApiError>> {\n  if (!req.amount) return err(invalidRequest());\n  ...\n}',
+      verification: 'semantic',
+      supportCount: 6,
+      violationCount: 1,
+      confidence: 6 / 8,
+    },
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'tsconfig-strict-mode',
+      rule: 'TypeScript strict mode is on — do not introduce implicit `any` or unchecked nulls.',
+      category: 'typing',
+      status: 'pending',
+      accepted: false,
+      source: 'config',
+      evidencePath: 'tsconfig.json',
+      evidenceStartLine: 3,
+      evidenceEndLine: 3,
+      evidenceSnippet: '"strict": true,',
+      verification: 'config',
+      supportCount: 0,
+      violationCount: 0,
+      confidence: 1,
+    },
+  ];
+  for (const values of seedConventions) {
+    await db.insert(t.conventions).values(values).onConflictDoNothing();
   }
 
   return { workspaceId, userId };

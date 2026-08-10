@@ -185,6 +185,11 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // L02 — skills linked to this agent, in order. Best-effort: a broken
+      // lookup must not fail the run, so it degrades to omitted (identical
+      // prompt to today).
+      const skills = await this.buildSkillBodies(agent.id, runLog);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -202,6 +207,8 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
+        // L02 — linked skill bodies, same omit-when-empty contract.
+        ...(skills.length ? { skills } : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -316,6 +323,31 @@ export class ReviewRunExecutor {
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
+    }
+  }
+
+  /**
+   * L02 — linked skill bodies for this agent, in `order` ascending. Filters to
+   * `skill.enabled` (the link fetch itself does not filter it — unlinking on
+   * disable is decision 3's job, not this query's). Returns `[]` on any error
+   * or when nothing is linked/enabled, so the caller omits the section entirely
+   * (byte-identical prompt to before this feature existed).
+   */
+  private async buildSkillBodies(agentId: string, runLog: RunLogger): Promise<string[]> {
+    try {
+      const bodies = await runLog.step(
+        'Loading enabled skills',
+        async () => {
+          const links = await this.agents.linkedSkills(agentId);
+          return links.filter((l) => l.skill.enabled).map((l) => l.skill.body);
+        },
+        { kind: 'tool' },
+      );
+      runLog.info(`${bodies.length} enabled skill(s) loaded`);
+      return bodies;
+    } catch (err) {
+      runLog.info(`skills: lookup failed — ${(err as Error).message}`);
+      return [];
     }
   }
 

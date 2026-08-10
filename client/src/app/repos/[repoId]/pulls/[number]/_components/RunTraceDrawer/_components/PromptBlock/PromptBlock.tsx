@@ -5,6 +5,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Icon, Modal } from "@devdigest/ui";
+import { approxTokens } from "@/lib/domain/tokens";
 import { s } from "../../styles";
 import { PromptModalBody } from "../PromptModalBody";
 
@@ -35,6 +36,11 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
       <div onClick={() => setOpen((o) => !o)} style={s.promptHead}>
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
+        {text && (
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            {t("trace.prompt.tokenCount", { count: approxTokens(text) })}
+          </span>
+        )}
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"

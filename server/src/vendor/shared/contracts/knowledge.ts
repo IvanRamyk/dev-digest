@@ -141,15 +141,76 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
+export const ConventionCategory = z.enum([
+  'naming',
+  'error_handling',
+  'structure',
+  'testing',
+  'imports',
+  'typing',
+  'logging',
+  'api',
+  'formatting',
+  'other',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+export const ConventionSource = z.enum(['config', 'model']);
+export type ConventionSource = z.infer<typeof ConventionSource>;
+
+/** How a candidate's support/violation counts were established. Drives the UI
+ *  badge and the confidence cap — see reviewer-core/specs/conventions.md §3. */
+export const ConventionVerification = z.enum(['config', 'pattern', 'semantic', 'unverified']);
+export type ConventionVerification = z.infer<typeof ConventionVerification>;
+
 export const ConventionCandidate = z.object({
   id: z.string(),
+  scan_id: z.string().nullable(),
   rule: z.string(),
+  category: ConventionCategory,
+  status: ConventionStatus,
+  source: ConventionSource,
   evidence_path: z.string(),
+  evidence_start_line: z.number().int().nullable(),
+  evidence_end_line: z.number().int().nullable(),
   evidence_snippet: z.string(),
+  verification: ConventionVerification,
+  support_count: z.number().int(),
+  violation_count: z.number().int(),
   confidence: z.number().min(0).max(1),
+  /** Legacy mirror of `status === 'accepted'` — read by PluginConvention (productionize.ts). */
   accepted: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+export const ConventionScanStatus = z.enum(['queued', 'running', 'done', 'failed']);
+export type ConventionScanStatus = z.infer<typeof ConventionScanStatus>;
+
+export const ConventionScan = z.object({
+  id: z.string(),
+  repo_id: z.string(),
+  status: ConventionScanStatus,
+  sample_file_count: z.number().int(),
+  batch_count: z.number().int(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  candidates_found: z.number().int(),
+  candidates_kept: z.number().int(),
+  degraded_reason: z.string().nullable(),
+  error: z.string().nullable(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type ConventionScan = z.infer<typeof ConventionScan>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a

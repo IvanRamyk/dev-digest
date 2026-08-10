@@ -39,6 +39,23 @@ _None yet._
 
 <!-- conventions and architecture that are not obvious from reading the code -->
 
+- 2026-08-08 — the repo-intel facade (`modules/repo-intel/types.ts`) exposes no
+  raw-row reads over `file_edges`/`file_facts`/`symbols` — only aggregated/degraded
+  views (`getBlastRadius`, `getSymbolsInFiles`, …). The conventions miners need the
+  raw import graph and endpoint population, and adding a generic "give me every
+  edge" facade method for a single caller would be the wrong kind of generality →
+  a module that needs raw repo-intel-owned table reads queries them directly from
+  its own `repository.ts` (a declared, deliberate layering smell) rather than
+  bloating the facade (`server/src/modules/conventions/repository.ts:83-159`, the
+  trade-off is written up in `specs/conventions.md` → Consequences)
+- 2026-08-08 — `conventions.accepted` (boolean) looks like dead weight once
+  `status` (`pending|accepted|rejected`) exists, but `PluginConvention`
+  (`server/src/vendor/shared/contracts/productionize.ts:60`) — a later lesson's
+  export/import contract — still reads that exact boolean column. Dropping it in
+  favor of `status` alone breaks that contract silently until the lesson ships
+  → keep it as a written mirror of `status === 'accepted'`, updated by the
+  repository on every status write, never read elsewhere
+  (`server/src/modules/conventions/repository.ts:203-214`)
 - 2026-08-06 — "the last batch of agents" is **not expressible** in this schema: `POST /pulls/:id/review {all:true}` creates one `agent_runs` row per agent in a plain for-loop (`src/modules/reviews/service.ts:119-129`), each taking its own `ranAt defaultNow()` (`src/db/schema/runs.ts:15`) — a real 3-agent batch in the dev DB was spread over 20 ms (`…18.983`, `…18.991`, `…19.003`) with nothing shared, and `multi_agent_runs` is an empty L07 placeholder with no reverse FK from `agent_runs` → before designing anything per-batch, check whether the ask reduces: "the last batch **plus** the agents it didn't touch" unfolds recursively into exactly "each agent's latest run", which the code already did, so no `batch_id` column and no migration were needed (`src/db/schema/runs.ts:44-53`)
 - 2026-08-05 — the seed writes a `reviews` row + its findings but **no `agent_runs` row** (`grep agentRuns src/db/seed.ts` → nothing; reviews at `src/db/seed.ts:137`, findings at `:150`), so on seeded data the PR-detail Timeline renders zero run rows and the run-history API returns `[]` → anything that renders *per timeline run* cannot be asserted by an e2e flow against the seed; cover it with a client component test instead, and do not read an empty Timeline as a bug (`server/src/db/seed.ts:137`)
 
@@ -46,7 +63,15 @@ _None yet._
 
 <!-- version constraints and quirks of deps and the toolchain -->
 
-_None yet._
+- 2026-08-08 — `@ast-grep/napi`'s `root.findAll({ rule: { pattern } })` does
+  **not** throw on a syntactically garbage pattern (e.g. unbalanced parens like
+  `)))not a real pattern(((`) — it just runs and returns zero matches, the same
+  outcome as "compiled fine, rule genuinely absent". A `try/catch` around
+  `findAll` therefore cannot distinguish "uncompilable pattern → fall through to
+  the LLM judge" from "compiled, support is legitimately 0" → pre-validate with a
+  cheap bracket-balance check before calling ast-grep at all if the two cases
+  need different handling (`server/src/modules/conventions/verifier.ts:170-183`,
+  `isWellFormedPattern`)
 
 ## Recurring Errors & Fixes
 

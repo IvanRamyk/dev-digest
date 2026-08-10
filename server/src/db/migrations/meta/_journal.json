@@ -78,6 +78,13 @@
       "when": 1786013395642,
       "tag": "0010_complete_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786170736467,
+      "tag": "0011_lovely_reavers",
+      "breakpoints": true
     }
   ]
 }

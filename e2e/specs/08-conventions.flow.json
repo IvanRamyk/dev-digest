@@ -1,0 +1,16 @@
+{
+  "name": "Conventions page renders the seeded scan and candidates",
+  "description": "Loads /conventions directly (no :repoId in the route — the page falls through useActiveRepo() to the seeded acme/payments-api, the only repo in a freshly-seeded DB) and confirms the seeded convention_scans + conventions rows render: the heading names the repo, the sample-file count and '1 of 3 accepted' summary appear, and all three seeded candidates (an accepted model rule, a pending semantic rule, and a pending config rule) are visible with their evidence paths. Read-only seeded data — no scan is started, no candidate is accepted/rejected, no model call. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/conventions"], "label": "load the conventions page" },
+    { "cmd": ["wait", "--url", "/conventions"], "label": "conventions route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "conventions fetch settles" },
+    { "cmd": ["wait", "--text", "Conventions in acme/payments-api"], "label": "heading names the seeded repo" },
+    { "cmd": ["wait", "--text", "1 of 3 accepted"], "label": "accepted-count summary reflects the seeded rows" },
+    { "cmd": ["wait", "--text", "All Redis access goes through"], "label": "the seeded accepted chokepoint rule is visible" },
+    { "cmd": ["wait", "--text", "src/lib/redis.ts"], "label": "its evidence path is visible" },
+    { "cmd": ["wait", "--text", "Route handlers return"], "label": "the seeded pending semantic rule is visible" },
+    { "cmd": ["wait", "--text", "TypeScript strict mode is on"], "label": "the seeded pending config rule is visible" },
+    { "cmd": ["wait", "--text", "from project config"], "label": "the config rule shows the config verification chip" }
+  ]
+}

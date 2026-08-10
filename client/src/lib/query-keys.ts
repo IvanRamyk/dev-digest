@@ -21,6 +21,14 @@ export const qk = {
   agents: {
     all: ["agents"] as const,
     detail: (id: string | null | undefined) => ["agents", "detail", id] as const,
+    skills: (id: string | null | undefined) => ["agents", "detail", id, "skills"] as const,
+  },
+
+  // ---- Skills ----
+  skills: {
+    all: ["skills"] as const,
+    detail: (id: string | null | undefined) => ["skills", "detail", id] as const,
+    versions: (id: string | null | undefined) => ["skills", "detail", id, "versions"] as const,
   },
 
   // ---- Repos and their sub-resources ----
@@ -29,6 +37,14 @@ export const qk = {
     pulls: (repoId: string | null | undefined) => ["repos", repoId, "pulls"] as const,
     context: (repoId: string | null | undefined) => ["repos", repoId, "context"] as const,
     intel: (repoId: string | null | undefined) => ["repos", repoId, "intel"] as const,
+  },
+
+  /** Prefix-nested so `all(repoId)` invalidates both the candidate list and the
+      scan poll target in one call — most conventions mutations want both. */
+  conventions: {
+    all: (repoId: string | null | undefined) => ["conventions", repoId] as const,
+    list: (repoId: string | null | undefined) => ["conventions", repoId, "list"] as const,
+    scan: (repoId: string | null | undefined) => ["conventions", repoId, "scan"] as const,
   },
 
   /** Everything scoped to one pull request. `activeRuns` nests under `runs`, so

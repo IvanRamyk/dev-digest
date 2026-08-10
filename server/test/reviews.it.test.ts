@@ -216,6 +216,69 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('trace prompt_assembly.skills is non-null when an enabled skill is linked, null when disabled', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'Skilled', provider: 'openai', model: 'gpt-4.1', system_prompt: 'sec' },
+      })
+    ).json();
+    const skill = (
+      await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: { name: 'test-coverage-rubric', body: '## Rubric\nFlag missing branch coverage.' },
+      })
+    ).json();
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_ids: [skill.id] },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/pulls/${pr.id}/review`,
+      payload: { agentId: agent.id },
+    });
+    const runId = res.json().runs[0].run_id;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    // completeAgentRun (terminal status) and saveRunTrace (the trace document)
+    // are two separate writes on the same run — poll the trace fetch too, so a
+    // status-terminal-but-trace-not-yet-persisted window doesn't flake this.
+    const fetchTrace = async (id: string) => {
+      for (let i = 0; i < 40; i++) {
+        const res = await app.inject({ method: 'GET', url: `/runs/${id}/trace` });
+        if (res.statusCode === 200) return res.json();
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      throw new Error(`trace for run ${id} never became available`);
+    };
+
+    const trace = await fetchTrace(runId);
+    expect(trace.prompt_assembly.skills).toContain('Flag missing branch coverage.');
+
+    // disable the skill and re-run — the block disappears from the new trace.
+    await app.inject({ method: 'PUT', url: `/skills/${skill.id}`, payload: { enabled: false } });
+    const res2 = await app.inject({
+      method: 'POST',
+      url: `/pulls/${pr.id}/review`,
+      payload: { agentId: agent.id },
+    });
+    const runId2 = res2.json().runs[0].run_id;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
+
+    const trace2 = await fetchTrace(runId2);
+    expect(trace2.prompt_assembly.skills).toBeNull();
+
+    await app.close();
+  });
+
   it('PR list totals the cost across agents, superseding each agent\'s earlier runs', async () => {
     const app = await appWith(REVIEW_FIXTURE);
     const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
