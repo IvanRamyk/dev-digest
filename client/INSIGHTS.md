@@ -31,6 +31,15 @@ _None yet._
 
 <!-- tried and abandoned, and why — the most valuable section, and the one most often skipped -->
 
+- 2026-08-06 — `usePulls` could not be made self-quenching per the `CLAUDE.md` "polls must
+  self-quench" rule, because `PrMeta` carries no in-flight signal at all: `PrStatus` is
+  `needs_review|reviewed|stale|open|closed|merged`, so a `refetchInterval` predicate has
+  nothing to test and a first attempt (`pr.review_status === "running"`) silently matched
+  nothing and disabled the poll → drop the interval entirely and let the writers refresh
+  the list: `useRefreshRepo` re-syncs, and the review/finding mutations invalidate
+  `qk.repos.pulls(repoId)` for the row counters (`src/lib/hooks/core.ts:107`,
+  `src/vendor/shared/contracts/platform.ts:155`)
+
 - 2026-08-05 — `toFixed(2)` on a run cost renders `$0.00` for nearly every real run
   (a live `deepseek/deepseek-v4-flash` review cost `0.00025368`; runs sit in the
   $0.0002–$0.05 band), destroying the one signal a cost badge exists to carry → format
@@ -50,6 +59,22 @@ _None yet._
 
 <!-- conventions and architecture that are not obvious from reading the code -->
 
+- 2026-08-06 — the rule "a mutation invalidates its own writes" has one path it cannot
+  cover: a review settles over SSE, which is neither a mutation nor a query, so nothing
+  in TanStack fires when a run finishes. Before this, the PR page patched it with
+  `invalidateActiveRuns`/`invalidateRunHistory` closures threaded down as
+  `onRunDone`/`onRunsStarted` props through `PrDetailHeader`, `FindingsTab` and
+  `RunStatus` → give the SSE hook the invalidation instead: `useRunEvents(runIds, {prId,
+  repoId})` invalidates when its last stream closes, which deleted the whole prop chain.
+  Read the scope through a ref — a caller passing a fresh object literal each render
+  would otherwise re-subscribe every EventSource (`src/lib/hooks/reviews.ts:200`,
+  `src/lib/hooks/reviews.ts:239`)
+- 2026-08-06 — corrects the three 2026-08-05 entries above/below that cite
+  `src/components/run-cost-badge/helpers.ts`: that file no longer exists. The cost
+  formatters moved to the pure domain tier and the numeric findings still hold verbatim
+  there → read them at `src/lib/domain/cost.ts:23` (`formatCost`) with the regression
+  tests in `src/lib/domain/cost.test.ts`; the same move sent `severityTally`/`totalOf` to
+  `src/lib/domain/findings.ts` and `latestPerAgentRuns` to `src/lib/domain/reviews.ts`
 - 2026-08-05 — on run/PR cost, `null` and `0` are different facts: `null` = unknown
   (unpriced model, or the run never completed) and renders `—`; `0` = real data (a free
   model such as `z-ai/glm-4.7-flash`) and renders `$0`. Collapsing them with `|| 0` or

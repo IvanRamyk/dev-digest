@@ -13,11 +13,15 @@ Route map, stack, and the API surface each page leans on live in `README.md`.
 - The server is the source of truth; the client only caches it (TanStack Query).
 - All network access goes through `src/lib/api.ts`; every data hook lives in
   `src/lib/hooks/*`.
+- Query keys live in `src/lib/query-keys.ts`, and a mutation invalidates everything it
+  touches. Components never write a key literal or call `invalidateQueries`.
 
 ## Read when
 
 - Starting work here → read `INSIGHTS.md` first (dated history, not rules — this file
   wins on any conflict)
+- Adding or moving a component, page, hook, constant, style, helper, or query key →
+  read `.claude/skills/client-architecture/SKILL.md` (tiers, segments, promotion rules)
 - Writing a component test → read `../TESTING.md` (vitest + jsdom, `fetch` mocked;
   no API and no browser needed)
 - Adding a real browser journey → read `../e2e/CLAUDE.md`

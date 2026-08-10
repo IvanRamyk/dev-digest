@@ -7,8 +7,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, type DropdownItemDef } from "@devdigest/ui";
-import { useAgents } from "../../../../../../../lib/hooks/agents";
-import { useRunReview } from "../../../../../../../lib/hooks/reviews";
+import { useAgents } from "@/lib/hooks/agents";
+import { useRunReview } from "@/lib/hooks/reviews";
 import { DROPDOWN_WIDTH } from "./constants";
 
 export function RunReviewDropdown({
@@ -17,7 +17,6 @@ export function RunReviewDropdown({
   kind = "primary",
   warnMerged = false,
   onRunStart,
-  onRunsStarted,
   onRunSettled,
 }: {
   prId: string;
@@ -27,7 +26,6 @@ export function RunReviewDropdown({
   warnMerged?: boolean;
   /** Fired the moment a run is kicked off (before it completes). */
   onRunStart?: () => void;
-  onRunsStarted?: (runIds: string[]) => void;
   /** Fired when the run request settles (success or error). */
   onRunSettled?: () => void;
 }) {
@@ -41,8 +39,9 @@ export function RunReviewDropdown({
   const kick = async (opts: { all?: boolean; agentId?: string }) => {
     onRunStart?.();
     try {
-      const res = await run.mutateAsync({ prId, ...opts });
-      onRunsStarted?.(res.runs.map((r) => r.run_id));
+      // useRunReview invalidates this PR's caches on success (C15) — the active
+      // run list picks the new run up on its own, no callback needed.
+      await run.mutateAsync({ prId, ...opts });
     } finally {
       onRunSettled?.();
     }

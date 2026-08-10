@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
+import type { RepoRow } from '../../db/rows.js';
 import * as t from '../../db/schema.js';
 
 /**
@@ -7,7 +8,7 @@ import * as t from '../../db/schema.js';
  * table. Every query is scoped by `workspaceId` (tenancy guard).
  */
 
-export type RepoRow = typeof t.repos.$inferSelect;
+export type { RepoRow };
 
 export interface InsertRepo {
   workspaceId: string;

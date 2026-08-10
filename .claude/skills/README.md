@@ -9,13 +9,16 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [fastify-best-practices](fastify-best-practices/SKILL.md) | Backend | Fastify routes, plugins, JSON-schema validation, error handling |
 | [drizzle-orm-patterns](drizzle-orm-patterns/SKILL.md) | Backend | Drizzle schema, queries, relations, transactions, migrations |
 | [postgresql-table-design](postgresql-table-design/SKILL.md) | Backend | Postgres schema design, data types, indexing, constraints |
+| [onion-architecture](onion-architecture/SKILL.md) | Backend | Ring map, inward-dependency rules `O1`–`O9`, port/adapter/mock protocol, diff audit mode |
 | [next-best-practices](next-best-practices/SKILL.md) | Frontend | Next.js App Router, RSC boundaries, data fetching, optimization |
 | [react-best-practices](react-best-practices/SKILL.md) | Frontend | React anti-patterns, state management, hooks rules |
+| [client-architecture](client-architecture/SKILL.md) | Frontend | Five-tier import direction `C1`–`C16`, folder segments, query-key factory, `src/lib/domain/` promotion rule |
 | [react-testing-library](react-testing-library/SKILL.md) | Frontend | General-purpose React Testing Library guide with Vitest |
 | [zod](zod/SKILL.md) | Full-stack | Zod schema validation, parsing, error handling, type inference |
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
+| [pr-self-review](pr-self-review/SKILL.md) | Shared | Pre-PR gate — routes the audit skills at the diff, normalizes to `CRITICAL`/`WARNING`/`SUGGESTION`, denies push on a verified CRITICAL |
 | [engineering-insights](engineering-insights/SKILL.md) | Shared | Append-only per-package `INSIGHTS.md` — non-obvious learnings, dedup, promotion to `CLAUDE.md` |
 
 ## What Are Skills?

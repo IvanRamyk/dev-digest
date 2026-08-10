@@ -5,25 +5,22 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { LiveLogStream, type LogLine } from "@devdigest/ui";
-import { useRunEvents } from "../../../../../../../lib/hooks/reviews";
+import { useRunEvents } from "@/lib/hooks/reviews";
 import { LOG_HEIGHT } from "./constants";
 import { s } from "./styles";
 
-export function RunStatus({
-  runIds,
-  onDone,
-}: {
+export interface RunStatusProps {
   runIds: string[];
-  onDone?: () => void;
-}) {
-  const t = useTranslations("prReview");
-  const { events, running } = useRunEvents(runIds);
-  const wasRunning = React.useRef(false);
+  /** Scope for cache invalidation when the runs settle — useRunEvents owns it. */
+  prId?: string | null;
+  repoId?: string | null;
+}
 
-  React.useEffect(() => {
-    if (running) wasRunning.current = true;
-    if (!running && wasRunning.current) onDone?.();
-  }, [running, onDone]);
+export function RunStatus({ runIds, prId, repoId }: RunStatusProps) {
+  const t = useTranslations("prReview");
+  // The hook invalidates this PR's caches when the last stream closes (C15), so
+  // there is no onDone callback to thread back up through the tree.
+  const { events, running } = useRunEvents(runIds, { prId, repoId });
 
   if (runIds.length === 0) return null;
 

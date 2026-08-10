@@ -2,113 +2,43 @@
    - Findings panel (VerdictBanner + FindingCards)
    - RunReviewDropdown (run all / a specific agent) + live SSE RunStatus
    - Basic file-by-file diff viewer in the Files tab
-   Tab state lives in query (?tab). */
+   Tab state lives in query (?tab).
+
+   Composition root (C3): route params in, one view per tab out. The wiring lives
+   in ./_components/hooks/usePrDetailPage. */
 "use client";
 
 import React from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Skeleton, ErrorState } from "@devdigest/ui";
-import { AppShell } from "../../../../../components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
-import { latestPerAgentRuns } from "@/components/severity-counts";
 import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
-import { usePullDetail, usePulls } from "../../../../../lib/hooks";
-import { useQueryClient } from "@tanstack/react-query";
-import { usePrReviews, useCancelRun, usePrActiveRuns, usePrRuns, useDeleteRun } from "../../../../../lib/hooks/reviews";
-import { useActiveRepo, useRepoNotFound } from "../../../../../lib/repo-context";
-import { ApiError } from "../../../../../lib/api";
-import { githubPrUrl } from "../../../../../lib/github-urls";
-import type { FindingRecord } from "@devdigest/shared";
+import { usePrDetailPage } from "./_components/hooks/usePrDetailPage";
+import { s } from "./styles";
 
 export default function PRDetailPage() {
-  const params = useParams<{ repoId: string; number: string }>();
-  const search = useSearchParams();
-  const router = useRouter();
-  const { repoId, number } = params;
-  const { activeRepo } = useActiveRepo();
-  const repoNotFound = useRepoNotFound(repoId);
-  // The route is keyed by PR number, but every PR API is keyed by the row's
-  // uuid — resolve number → uuid via the (cached) pulls list before fetching.
-  const { data: pulls, isLoading: pullsLoading } = usePulls(repoId);
-  const prId = pulls?.find((p) => p.number === Number(number))?.id ?? null;
-  const { data: pr, isLoading: detailLoading, isError, error, refetch } = usePullDetail(prId);
+  const { repoId, number } = useParams<{ repoId: string; number: string }>();
+  const t = useTranslations("prReview");
+  const vm = usePrDetailPage(repoId, number);
 
-  const isLoading = pullsLoading || (prId != null && detailLoading);
-  const { data: reviews, refetch: refetchReviews } = usePrReviews(prId);
-
-  // Live run tracking is SERVER-SOURCED (agent_runs status='running'): survives
-  // navigation AND reload, and self-clears via polling when runs finish.
-  const qc = useQueryClient();
-  const { data: activeRuns } = usePrActiveRuns(prId);
-  const { data: prRuns } = usePrRuns(prId);
-  const deleteRun = useDeleteRun(prId);
-  const liveRunIds = (activeRuns ?? []).map((r) => r.run_id);
-  const reviewRunning = liveRunIds.length > 0;
-  const cancel = useCancelRun();
-  const invalidateActiveRuns = () => {
-    if (prId) qc.invalidateQueries({ queryKey: ["pr-active-runs", prId] });
-  };
-  // When a run settles (done OR failed) refresh the full run history too, so a
-  // just-failed run shows up in "Run history" immediately — no page reload.
-  const invalidateRunHistory = () => {
-    if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
-  };
-
-  const tab = search.get("tab") ?? "overview";
-  const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
-    const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
-    router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
-  };
-  const setTab = (t: string) => setParam("tab", t);
-
-  // Reviews come newest-first; each is its own run (grouped into accordions).
-  const runs = reviews ?? [];
-  // Counts describe the CURRENT state of the review: per agent, the review from
-  // that agent's latest RUN — and nothing when that run failed, was cancelled, or
-  // is still going. Keyed on runs, not reviews, so a dead newest run suppresses
-  // the agent's earlier findings instead of resurrecting them. Matches the PR
-  // list's findings_by_severity and cost_usd.
-  //
-  // The accordion list below still renders every review: run history does not
-  // disappear when a run is superseded, so the tab badge deliberately does not
-  // equal the sum of the accordion headers.
-  const allFindings: FindingRecord[] = React.useMemo(
-    () => latestPerAgentRuns(runs, prRuns ?? []).flatMap((r) => r.findings),
-    [runs, prRuns],
-  );
-  const lethalTrifecta = allFindings.filter((f) => f.kind === "lethal_trifecta");
-  const findingsCount = allFindings.length;
-
-  const repoName = activeRepo?.full_name ?? repoId;
-  // The real "owner/repo" (null until the repo is loaded) — used to build
-  // github.com deep-links for the header and finding file references.
-  const repoFullName = activeRepo?.full_name ?? null;
-  const crumb = [
-    { label: repoName, mono: true, href: `/repos/${repoId}/pulls` },
-    { label: "Pull Requests", href: `/repos/${repoId}/pulls` },
-    { label: `#${number}`, mono: true },
-  ];
-
-  // Stale/unknown :repoId → friendly empty state instead of a 404 error.
-  if (repoNotFound) {
+  if (vm.repoNotFound) {
     return (
-      <AppShell crumb={crumb}>
+      <AppShell crumb={vm.crumb}>
         <RepoNotFound />
       </AppShell>
     );
   }
 
-  if (isLoading) {
+  if (vm.isLoading) {
     return (
-      <AppShell crumb={crumb}>
-        <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 1080, margin: "0 auto" }}>
+      <AppShell crumb={vm.crumb}>
+        <div style={s.loading}>
           <Skeleton height={28} width={420} />
           <Skeleton height={16} width={300} />
           <Skeleton height={200} />
@@ -117,63 +47,55 @@ export default function PRDetailPage() {
     );
   }
 
-  if (isError || !pr) {
+  if (vm.isError || !vm.pr) {
     return (
-      <AppShell crumb={crumb}>
+      <AppShell crumb={vm.crumb}>
         <ErrorState
           fullScreen
-          title="Couldn't load this pull request"
-          body={error instanceof ApiError ? error.message : `PR #${number} could not be loaded.`}
-          onRetry={() => refetch()}
+          title={t("findingsTab.loadErrorTitle")}
+          body={vm.errorMessage ?? t("findingsTab.loadErrorBody", { number })}
+          onRetry={vm.refetch}
         />
       </AppShell>
     );
   }
 
+  const { pr } = vm;
+
   return (
-    <AppShell crumb={crumb}>
+    <AppShell crumb={vm.crumb}>
       <PrDetailHeader
         pr={pr}
-        prId={prId}
-        tab={tab}
-        findingsCount={findingsCount}
-        githubUrl={repoFullName ? githubPrUrl(repoFullName, pr.number) : null}
-        onSetTab={setTab}
-        onRunStart={() => setTab("findings")}
-        onRunsStarted={() => invalidateActiveRuns()}
+        prId={vm.prId}
+        tab={vm.tab}
+        findingsCount={vm.findingsCount}
+        githubUrl={vm.githubUrl}
+        onSetTab={vm.setTab}
+        onRunStart={vm.onRunStart}
       />
 
-      <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prBody={pr.body} />}
+      <div style={s.body}>
+        {vm.tab === "overview" && <OverviewTab prBody={pr.body} />}
 
-        {tab === "findings" && (
+        {vm.tab === "findings" && (
           <FindingsTab
-            prId={prId}
-            liveRunIds={liveRunIds}
-            reviewRunning={reviewRunning}
-            lethalTrifecta={lethalTrifecta}
-            runs={runs}
-            prRuns={prRuns}
+            prId={vm.prId}
+            repoId={repoId}
+            liveRunIds={vm.liveRunIds}
+            reviewRunning={vm.reviewRunning}
+            lethalTrifecta={vm.lethalTrifecta}
+            runs={vm.runs}
+            prRuns={vm.prRuns}
             prCommits={pr.commits}
-            repoFullName={repoFullName}
+            repoFullName={vm.repoFullName}
             headSha={pr.head_sha}
-            cancelMutation={cancel}
-            onOpenTrace={(id) => setParam("trace", id)}
-            onDelete={(id) => {
-              if (window.confirm("Delete this run from history? (its logs are removed too)"))
-                deleteRun.mutate(id);
-            }}
-            onRunDone={() => {
-              invalidateActiveRuns();
-              invalidateRunHistory();
-              refetchReviews();
-            }}
+            onOpenTrace={vm.openTrace}
           />
         )}
 
-        {tab === "diff" && (
+        {vm.tab === "diff" && (
           <DiffTab
-            prId={prId}
+            prId={vm.prId}
             filesCount={pr.files_count}
             files={pr.files}
             canComment={pr.status === "open"}
@@ -181,13 +103,13 @@ export default function PRDetailPage() {
         )}
       </div>
 
-      {prId && traceRunId && (
+      {vm.prId && vm.traceRunId && (
         <RunTraceDrawer
-          runId={traceRunId}
+          runId={vm.traceRunId}
           prNumber={pr.number}
-          findings={runs.find((r) => r.run_id === traceRunId)?.findings ?? []}
-          agentName={runs.find((r) => r.run_id === traceRunId)?.agent_name ?? null}
-          onClose={() => setParam("trace", null)}
+          findings={vm.traceFindings}
+          agentName={vm.traceAgentName}
+          onClose={vm.closeTrace}
         />
       )}
     </AppShell>

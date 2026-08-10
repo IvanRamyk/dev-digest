@@ -10,7 +10,8 @@ import { useTranslations } from "next-intl";
 import { Icon, CategoryTag, ConfidenceNum, SEV, type Category, type Severity } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
 import { POPOVER_MAX_ITEMS, POPOVER_OFFSET, POPOVER_WIDTH } from "./constants";
-import { fileLabel, rationalePreview, sortBySeverity } from "./helpers";
+import { sortBySeverity } from "@/lib/domain/findings";
+import { fileLabel, rationalePreview } from "./helpers";
 import { s } from "./styles";
 
 export interface FindingsHoverCardProps {

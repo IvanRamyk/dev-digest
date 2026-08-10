@@ -2,6 +2,14 @@
 
 Good/bad patterns for each rule in [SKILL.md](SKILL.md).
 
+> **Stack note for DevDigest's `client/`.** These examples are written for a Vite +
+> Tailwind + axios + react-router app. Do **not** copy the styling, axios, error-boundary
+> or lazy-loading idioms into `client/` — it is Next.js App Router with `fetch`, TanStack
+> Query, and `styles.ts` objects. See
+> [`client-architecture`](../client-architecture/SKILL.md) and the applicability table in
+> [SKILL.md](SKILL.md). The React semantics shown here (derive-don't-store, effects,
+> keys, memoization, conditional rendering, a11y) apply as written.
+
 ---
 
 ## Derive, Don't Store

@@ -16,7 +16,9 @@
     "components": "TRIFECTA COMPONENTS",
     "privateData": "Private data",
     "untrustedInput": "Untrusted input",
-    "exfilPath": "Exfil path"
+    "exfilPath": "Exfil path",
+    "detected": "Lethal Trifecta detected",
+    "findingCount": "{count} finding(s)"
   },
   "verdict": {
     "requestChanges": "Request changes",
@@ -119,6 +121,30 @@
   "timeline": {
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
-    "deleteRun": "Delete run"
+    "deleteRun": "Delete run",
+    "deleteReviewRun": "Delete this review run"
+  },
+  "findingsTab": {
+    "liveReview": "Live review",
+    "cancel": "Cancel",
+    "cancelAll": "Cancel all running agents",
+    "openTrace": "Open run trace",
+    "inProgress": "Review in progress…",
+    "inProgressSub": "the agent is analyzing the diff — this can take a while on large PRs.",
+    "timeline": "Timeline",
+    "timelineHint": "runs & commits · newest first",
+    "reviewRuns": "Review runs",
+    "reviewRunsHint": "grouped by run · newest first",
+    "emptyTitle": "No findings yet",
+    "emptyBody": "Run a review to generate findings. Use Run Review ▾ above (run all enabled agents or a specific one).",
+    "deleteRunConfirm": "Delete this run from history? (its logs are removed too)",
+    "loadErrorTitle": "Couldn’t load this pull request",
+    "loadErrorBody": "PR #{number} could not be loaded."
+  },
+  "reviewRun": {
+    "agentFallback": "Agent",
+    "findingCount": "{count} finding(s)",
+    "blockers": " · {count} blocker(s)",
+    "deleteConfirm": "Delete this \"{agent}\" review run and its findings?"
   }
 }

@@ -12,7 +12,8 @@ import { NextIntlClientProvider } from "next-intl";
 import type { ReviewRecord, RunSummary } from "@devdigest/shared";
 import messages from "../../../messages/en/prReview.json";
 import { SeverityCounts } from "./SeverityCounts";
-import { severityTally, totalOf, latestPerAgentRuns } from "./helpers";
+import { severityTally, totalOf } from "@/lib/domain/findings";
+import { latestPerAgentRuns } from "@/lib/domain/reviews";
 
 afterEach(cleanup);
 

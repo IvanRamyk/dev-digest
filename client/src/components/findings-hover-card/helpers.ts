@@ -1,14 +1,7 @@
 /** Pure helpers for FindingsHoverCard. */
 
 import type { FindingRecord } from "@devdigest/shared";
-import { RATIONALE_MAX_CHARS, SEVERITY_ORDER } from "./constants";
-
-/** Worst findings first, so the card leads with what matters. Stable, non-mutating. */
-export function sortBySeverity(findings: FindingRecord[]): FindingRecord[] {
-  return [...findings].sort(
-    (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9),
-  );
-}
+import { RATIONALE_MAX_CHARS } from "./constants";
 
 /** First line of the rationale, clipped. The card is a preview, not the finding. */
 export function rationalePreview(rationale: string): string {

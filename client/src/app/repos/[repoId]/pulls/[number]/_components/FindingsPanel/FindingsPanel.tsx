@@ -6,9 +6,10 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord, Severity } from "@devdigest/shared";
-import { SeverityCounts, severityTally } from "@/components/severity-counts";
+import { SeverityCounts } from "@/components/severity-counts";
+import { severityTally } from "@/lib/domain/findings";
 import { FindingCard } from "../FindingCard";
-import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
+import { useFindingAction } from "@/lib/hooks/reviews";
 import { KEY_TO_ACTION } from "./constants";
 import { visibleFindings } from "./helpers";
 import { s } from "./styles";
@@ -16,11 +17,14 @@ import { s } from "./styles";
 export function FindingsPanel({
   findings,
   prId,
+  repoId,
   repoFullName,
   headSha,
 }: {
   findings: FindingRecord[];
   prId: string;
+  /** Invalidation scope — an accepted/dismissed finding changes list counters. */
+  repoId: string;
   repoFullName?: string | null;
   headSha?: string | null;
 }) {
@@ -54,12 +58,12 @@ export function FindingsPanel({
       if (e.key === "j") setFocusIdx((i) => Math.min(i + 1, shown.length - 1));
       else if (e.key === "k") setFocusIdx((i) => Math.max(i - 1, 0));
       else if (KEY_TO_ACTION[e.key] && shown[focusIdx]) {
-        action.mutate({ findingId: shown[focusIdx]!.id, action: KEY_TO_ACTION[e.key]!, prId });
+        action.mutate({ findingId: shown[focusIdx]!.id, action: KEY_TO_ACTION[e.key]!, prId, repoId });
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [shown, focusIdx, action, prId]);
+  }, [shown, focusIdx, action, prId, repoId]);
 
   return (
     <div>
@@ -89,7 +93,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
-              onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
+              onAction={(act) => action.mutate({ findingId: f.id, action: act, prId, repoId })}
             />
           ))
         )}

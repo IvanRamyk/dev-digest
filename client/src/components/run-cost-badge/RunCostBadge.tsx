@@ -3,7 +3,7 @@
    The run trace drawer imports formatCost directly for its COST stat tile. */
 "use client";
 
-import { formatCost, formatTokenTotal } from "./helpers";
+import { formatCost, formatTokenTotal } from "@/lib/domain/cost";
 import { s } from "./styles";
 
 export interface RunCostBadgeProps {
