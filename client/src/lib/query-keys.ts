@@ -39,6 +39,14 @@ export const qk = {
     intel: (repoId: string | null | undefined) => ["repos", repoId, "intel"] as const,
   },
 
+  /** Prefix-nested so `all(repoId)` invalidates both the candidate list and the
+      scan poll target in one call — most conventions mutations want both. */
+  conventions: {
+    all: (repoId: string | null | undefined) => ["conventions", repoId] as const,
+    list: (repoId: string | null | undefined) => ["conventions", repoId, "list"] as const,
+    scan: (repoId: string | null | undefined) => ["conventions", repoId, "scan"] as const,
+  },
+
   /** Everything scoped to one pull request. `activeRuns` nests under `runs`, so
       invalidating `runs` also covers the active subset — which is what most run
       mutations want. */

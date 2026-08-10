@@ -322,6 +322,98 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     }
   }
 
+  // ---- L03 — a seeded conventions scan for acme/payments-api ----
+  // The non-empty state (accepted/pending, config/model, every verification
+  // kind) is otherwise unreachable without an API key — needed for the
+  // conventions e2e flow, which never calls a real model.
+  let [scan] = await db.select().from(t.conventionScans).where(eq(t.conventionScans.repoId, repoId));
+  if (!scan) {
+    [scan] = await db
+      .insert(t.conventionScans)
+      .values({
+        workspaceId,
+        repoId,
+        status: 'done',
+        sampleFileCount: 24,
+        batchCount: 3,
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        tokensIn: 4820,
+        tokensOut: 610,
+        costUsd: 0.014,
+        candidatesFound: 3,
+        candidatesKept: 3,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      })
+      .returning();
+  }
+  const scanId = scan!.id;
+
+  const seedConventions: Array<typeof t.conventions.$inferInsert> = [
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'chokepoint-redis-client',
+      rule: "All Redis access goes through `src/lib/redis.ts` — no other module imports the redis client directly.",
+      category: 'structure',
+      status: 'accepted',
+      accepted: true,
+      source: 'model',
+      evidencePath: 'src/lib/redis.ts',
+      evidenceStartLine: 1,
+      evidenceEndLine: 12,
+      evidenceSnippet: "import Redis from 'ioredis';\n\nexport const redis = new Redis(process.env.REDIS_URL);",
+      verification: 'pattern',
+      supportCount: 8,
+      violationCount: 0,
+      confidence: 8 / 9,
+    },
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'role-contract-handler-result',
+      rule: 'Route handlers return `Result<T, ApiError>` and never throw for an expected failure.',
+      category: 'api',
+      status: 'pending',
+      accepted: false,
+      source: 'model',
+      evidencePath: 'src/routes/charges.ts',
+      evidenceStartLine: 14,
+      evidenceEndLine: 20,
+      evidenceSnippet:
+        'export async function createCharge(req: ChargeRequest): Promise<Result<Charge, ApiError>> {\n  if (!req.amount) return err(invalidRequest());\n  ...\n}',
+      verification: 'semantic',
+      supportCount: 6,
+      violationCount: 1,
+      confidence: 6 / 8,
+    },
+    {
+      workspaceId,
+      repoId,
+      scanId,
+      ruleKey: 'tsconfig-strict-mode',
+      rule: 'TypeScript strict mode is on — do not introduce implicit `any` or unchecked nulls.',
+      category: 'typing',
+      status: 'pending',
+      accepted: false,
+      source: 'config',
+      evidencePath: 'tsconfig.json',
+      evidenceStartLine: 3,
+      evidenceEndLine: 3,
+      evidenceSnippet: '"strict": true,',
+      verification: 'config',
+      supportCount: 0,
+      violationCount: 0,
+      confidence: 1,
+    },
+  ];
+  for (const values of seedConventions) {
+    await db.insert(t.conventions).values(values).onConflictDoNothing();
+  }
+
   return { workspaceId, userId };
 }
 

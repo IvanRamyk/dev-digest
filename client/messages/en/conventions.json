@@ -15,12 +15,49 @@
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
       "cta": "Run extraction"
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files",
+    "deselectAll": "Deselect all",
+    "createSkill": "Create skill",
+    "acceptedCount": "{accepted} of {total} accepted",
+    "unverifiedDivider": "Not verified — suggestions, not findings",
+    "detectedFrom": "Detected from {count, plural, one {# sample file} other {# sample files}}",
+    "lastScan": "last scan {when}",
+    "noApiKey": "No API key configured for this feature model.",
+    "openApiKeys": "Open API Keys settings"
   },
   "card": {
     "confidence": "Confidence",
     "accepted": "Accepted",
     "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "accept": "Accept",
+    "reject": "Reject",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "fromConfig": "from project config",
+    "copyEvidence": "Copy evidence",
+    "copied": "Copied",
+    "verification": {
+      "config": "from project config",
+      "pattern": "{support, plural, one {# file} other {# files}} match · {violation, plural, one {# exception} other {# exceptions}}",
+      "semantic": "judged on {total, plural, one {# file} other {# files}} · {support} follow · {violation} break",
+      "unverified": "not verified",
+      "unverifiedReasonPattern": "pattern didn't compile",
+      "unverifiedReasonBudget": "judge budget exhausted"
+    }
+  },
+  "modal": {
+    "title": "Create skill from accepted conventions",
+    "subtitle": "{count, plural, one {# candidate} other {# candidates}} accepted",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "enabled": "Enabled",
+    "body": "Body",
+    "cancel": "Cancel",
+    "save": "Create skill",
+    "saving": "Creating…",
+    "successToast": "Skill created",
+    "openInSkillsLab": "Open in Skills Lab"
   }
 }
