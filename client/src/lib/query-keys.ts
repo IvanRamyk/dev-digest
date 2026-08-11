@@ -59,6 +59,10 @@ export const qk = {
       reviews: ["pr", prId, "reviews"] as const,
       comments: ["pr", prId, "comments"] as const,
       intent: ["pr", prId, "intent"] as const,
+      // Nested under this PR's prefix, so `useRunEvents`'
+      // invalidateQueries({ queryKey: qk.pr(prId).all }) refreshes the smart
+      // diff when a run settles — no new invalidation code needed (C15).
+      smartDiff: ["pr", prId, "smart-diff"] as const,
     }) as const,
 
   // ---- Run trace (keyed by run, not by PR) ----

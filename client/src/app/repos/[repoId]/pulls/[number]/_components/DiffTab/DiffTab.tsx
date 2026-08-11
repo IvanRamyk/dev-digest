@@ -2,22 +2,42 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { SectionLabel, Button } from "@devdigest/ui";
+import { SectionLabel, Button, Chip } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi } from "@/components/diff-viewer";
 import { usePrComments, useCreatePrComment } from "@/lib/hooks/reviews";
 import { notify } from "@/lib/toast";
-import type { PrFile } from "@devdigest/shared";
+import type { PrFile, SmartDiff, FindingRecord } from "@devdigest/shared";
+import { SmartDiffViewer } from "../SmartDiffViewer";
+import { s } from "./styles";
 
 export interface DiffTabProps {
   prId: string | null;
   filesCount: number;
   files: PrFile[];
+  /** Reviewer-ordered groups. Undefined while loading or on error → falls back
+      to the flat DiffViewer (graceful degradation; never an error state). */
+  smartDiff?: SmartDiff;
+  /** Live findings, for the Smart Diff per-line severity marks. */
+  findings: FindingRecord[];
+  /** 'smart' or 'original' — the diff ordering, URL-backed (?order). */
+  order: string;
+  onSetOrder: (next: string) => void;
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({
+  prId,
+  filesCount,
+  files,
+  smartDiff,
+  findings,
+  order,
+  onSetOrder,
+  canComment,
+}: DiffTabProps) {
   const t = useTranslations("shell");
+  const ts = useTranslations("prReview.smartDiff");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   // Comments start hidden so the diff is clean by default — toggle to reveal.
@@ -42,26 +62,51 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
     },
   };
 
+  // Smart order is the default, but a failed/loading classification must never
+  // hide the diff — degrade to the flat DiffViewer rather than an error state.
+  const showSmart = order === "smart" && !!smartDiff;
+
   return (
     <section>
       <SectionLabel
         icon="Code"
         right={
-          commentCount > 0 ? (
-            <Button
-              kind="ghost"
-              size="sm"
-              icon={showComments ? "EyeOff" : "Eye"}
-              onClick={() => setShowComments((v) => !v)}
-            >
-              {showComments ? t("diffViewer.hideComments") : t("diffViewer.showComments")} ({commentCount})
-            </Button>
-          ) : undefined
+          <div style={s.controls}>
+            <div style={s.orderToggle}>
+              <Chip active={order === "smart"} onClick={() => onSetOrder("smart")}>
+                {ts("smartOrder")}
+              </Chip>
+              <Chip active={order === "original"} onClick={() => onSetOrder("original")}>
+                {ts("originalOrder")}
+              </Chip>
+            </div>
+            {commentCount > 0 && (
+              <Button
+                kind="ghost"
+                size="sm"
+                icon={showComments ? "EyeOff" : "Eye"}
+                onClick={() => setShowComments((v) => !v)}
+              >
+                {showComments ? t("diffViewer.hideComments") : t("diffViewer.showComments")} (
+                {commentCount})
+              </Button>
+            )}
+          </div>
         }
       >
         {t("diffViewer.filesChanged", { count: filesCount })}
       </SectionLabel>
-      <DiffViewer files={files} commenting={commenting} />
+
+      {showSmart ? (
+        <SmartDiffViewer
+          smartDiff={smartDiff}
+          files={files}
+          findings={findings}
+          commenting={commenting}
+        />
+      ) : (
+        <DiffViewer files={files} commenting={commenting} />
+      )}
     </section>
   );
 }

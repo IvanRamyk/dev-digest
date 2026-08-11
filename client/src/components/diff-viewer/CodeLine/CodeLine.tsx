@@ -4,9 +4,10 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Badge, SEV, type Severity } from "@devdigest/ui";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
-import { type Line } from "../helpers";
-import { s, lineRowFor, lineSignFor } from "../styles";
+import { type Line } from "@/lib/domain/diff";
+import { s, lineRowFor, lineRowMarkedFor, lineSignFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
 
@@ -15,11 +16,17 @@ export function CodeLine({
   path,
   threads,
   commenting,
+  mark,
+  lineIdPrefix,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  /** Smart Diff: severity of a finding that touches this line (adds a left mark). */
+  mark?: Severity;
+  /** Smart Diff: prefix for the row's DOM id, so scroll-to-line can target it. */
+  lineIdPrefix?: string;
 }) {
   const t = useTranslations("shell");
   const [hover, setHover] = React.useState(false);
@@ -36,6 +43,7 @@ export function CodeLine({
   const sign = ln.kind === "add" ? "+" : ln.kind === "del" ? "−" : "";
   const target = commenting?.canComment ? commentTargetFor(ln) : null;
   const showAdd = hover && !!target && !composing;
+  const rowId = lineIdPrefix && ln.newNo != null ? `${lineIdPrefix}-${ln.newNo}` : undefined;
 
   return (
     <div
@@ -43,7 +51,7 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind)}>
+      <div id={rowId} style={mark ? lineRowMarkedFor(ln.kind, mark) : lineRowFor(ln.kind)}>
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button
@@ -64,6 +72,11 @@ export function CodeLine({
         <span className="mono" style={s.lineText}>
           {ln.text || " "}
         </span>
+        {mark && (
+          <span style={s.lineMark}>
+            <Badge color={SEV[mark].c} bg={SEV[mark].bg} icon={SEV[mark].icon} />
+          </span>
+        )}
       </div>
 
       {commenting &&

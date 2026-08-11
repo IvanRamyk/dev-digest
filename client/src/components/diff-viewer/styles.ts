@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import type { Line } from "./helpers";
+import { SEV, type Severity } from "@devdigest/ui";
+import type { Line } from "@/lib/domain/diff";
 
 /** Co-located styles for the DiffViewer (extracted from inline styles). */
 export const s = {
@@ -64,6 +65,12 @@ export const s = {
     color: "var(--text-primary)",
     paddingRight: 12,
   } satisfies CSSProperties,
+  lineMark: {
+    display: "inline-flex",
+    alignItems: "center",
+    paddingRight: 12,
+    flexShrink: 0,
+  } satisfies CSSProperties,
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */
@@ -79,6 +86,16 @@ export function chevronFor(open: boolean): CSSProperties {
 export function lineRowFor(kind: Line["kind"]): CSSProperties {
   const background = kind === "add" ? "var(--code-add)" : kind === "del" ? "var(--code-del)" : "transparent";
   return { display: "flex", alignItems: "stretch", fontSize: 13, lineHeight: "20px", background };
+}
+
+/** Row background per line kind, plus a severity accent on the left border.
+    Used by Smart Diff to mark lines a finding touches; the colour is the SEV
+    token (`var(--crit)`/`var(--warn)`/`var(--sugg)`), never a hex literal. */
+export function lineRowMarkedFor(kind: Line["kind"], severity: Severity): CSSProperties {
+  return {
+    ...lineRowFor(kind),
+    borderLeft: `3px solid ${SEV[severity].c}`,
+  };
 }
 
 /** Gutter sign colour per line kind. */

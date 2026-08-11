@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { FindingRecord } from "@devdigest/shared";
 import { usePullDetail, usePulls } from "@/lib/hooks";
-import { usePrActiveRuns, usePrReviews, usePrRuns } from "@/lib/hooks/reviews";
+import { usePrActiveRuns, usePrReviews, usePrRuns, useSmartDiff } from "@/lib/hooks/reviews";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { latestPerAgentRuns } from "@/lib/domain/reviews";
 import { ApiError } from "@/lib/api";
@@ -35,14 +35,21 @@ export function usePrDetailPage(repoId: string, number: string) {
   const { data: activeRuns } = usePrActiveRuns(prId);
   const { data: prRuns } = usePrRuns(prId);
 
+  // Smart Diff (reviewer-ordered groups). Gated on `!!pr`: GET /pulls/:id is what
+  // persists pr_files, so on a cold load this must wait or it reads an empty
+  // table. The finding-line overlay comes from `allFindings` below, not here.
+  const { data: smartDiff } = useSmartDiff(prId, !!pr);
+
   const liveRunIds = React.useMemo(
     () => (activeRuns ?? []).map((r) => r.run_id),
     [activeRuns],
   );
 
-  // ---- URL state (?tab, ?trace) ----
+  // ---- URL state (?tab, ?trace, ?order) ----
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
+  // Diff ordering: 'smart' (reviewer-ordered groups) by default, or 'original'.
+  const order = search.get("order") ?? "smart";
   const setParam = React.useCallback(
     (key: string, val: string | null) => {
       const sp = new URLSearchParams(search.toString());
@@ -55,6 +62,7 @@ export function usePrDetailPage(repoId: string, number: string) {
     [search, router, repoId, number],
   );
   const setTab = React.useCallback((next: string) => setParam("tab", next), [setParam]);
+  const setOrder = React.useCallback((next: string) => setParam("order", next), [setParam]);
   const openTrace = React.useCallback((id: string) => setParam("trace", id), [setParam]);
   const closeTrace = React.useCallback(() => setParam("trace", null), [setParam]);
   const onRunStart = React.useCallback(() => setTab("findings"), [setTab]);
@@ -98,6 +106,10 @@ export function usePrDetailPage(repoId: string, number: string) {
     prId,
     runs,
     prRuns,
+    smartDiff,
+    // The latest-run findings the diff overlay marks lines from. Exposed, not
+    // recomputed downstream, so the diff marks agree with the findings tab.
+    allFindings,
     // state
     isLoading: pullsLoading || (prId != null && detailLoading),
     isError,
@@ -115,6 +127,8 @@ export function usePrDetailPage(repoId: string, number: string) {
     // url state
     tab,
     setTab,
+    order,
+    setOrder,
     onRunStart,
     traceRunId,
     traceFindings: tracedReview?.findings ?? [],
