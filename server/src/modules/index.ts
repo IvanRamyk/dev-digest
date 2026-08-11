@@ -6,6 +6,7 @@ import polling from './polling/routes.js';
 import workspace from './workspace/routes.js';
 import agents from './agents/routes.js';
 import reviews from './reviews/routes.js';
+import intent from './intent/routes.js';
 import repoIntel from './repo-intel/routes.js';
 import skills from './skills/routes.js';
 import conventions from './conventions/routes.js';
@@ -31,6 +32,7 @@ export const modules: Record<string, FastifyPluginAsync> = {
   workspace,
   agents,
   reviews,
+  intent,
   repoIntel,
   skills,
   conventions,

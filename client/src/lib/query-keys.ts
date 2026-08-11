@@ -58,6 +58,7 @@ export const qk = {
       activeRuns: ["pr", prId, "runs", "active"] as const,
       reviews: ["pr", prId, "reviews"] as const,
       comments: ["pr", prId, "comments"] as const,
+      intent: ["pr", prId, "intent"] as const,
     }) as const,
 
   // ---- Run trace (keyed by run, not by PR) ----

@@ -1,10 +1,11 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { Intent, Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
+import { IntentService } from '../intent/service.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
@@ -106,6 +107,25 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Shared pre-work: derive the PR intent once (a distinct, cheap classifier
+    // call — the review's SECOND LLM call is visible in the Live Log). Fanned to
+    // every queued run's stream. BEST-EFFORT: a classifier failure must NEVER
+    // fail the review (same posture as the repo-intel enrichments), so we
+    // degrade to "no intent" and the engine skips the intent section + scope
+    // filter entirely.
+    let intent: Intent | undefined;
+    try {
+      intent = await runLog.step(
+        'Deriving PR intent',
+        () => new IntentService(this.container).derive(workspaceId, pull.id),
+        { kind: 'tool' },
+      );
+      runLog.info(`Intent derived — confidence ${intent.confidence}, ${intent.sources.length} source(s)`);
+    } catch (err) {
+      runLog.info(`Intent derivation skipped — ${(err as Error).message}`);
+      intent = undefined;
+    }
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -113,7 +133,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, intent, agent, runId, runLog);
         logger?.info(
           {
             runId,
@@ -142,6 +162,7 @@ export class ReviewRunExecutor {
     pull: PullRow,
     repo: typeof schema.repos.$inferSelect,
     diff: UnifiedDiff,
+    intent: Intent | undefined,
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
@@ -212,6 +233,10 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Derived intent — drives the untrusted `## Intent & scope` prompt
+        // section AND the post-grounding scope filter. Mapped DTO → the engine's
+        // plain string-bag. Omitted when the classifier degraded (no intent).
+        ...(intent ? { intent: IntentService.toEngineIntent(intent) } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),

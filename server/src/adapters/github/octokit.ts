@@ -11,10 +11,25 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  RepoFileResult,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
 const TIMEOUT = 30_000;
+
+/** Max bytes of an in-repo plan/spec we will pull into the classifier prompt. */
+const MAX_REPO_FILE_BYTES = 64_000;
+
+/**
+ * Allowlist for `getRepoFile`: only in-repo paths under `specs/` or `docs/`, or
+ * any `*.md`. Anything else — an absolute URL, a `..` traversal, a source file —
+ * is rejected so the classifier never fetches arbitrary content (security §4).
+ */
+export function isAllowedRepoFilePath(path: string): boolean {
+  if (!path || path.includes('://') || path.includes('..') || path.startsWith('/')) return false;
+  const clean = path.replace(/^\.\//, '');
+  return clean.startsWith('specs/') || clean.startsWith('docs/') || clean.endsWith('.md');
+}
 
 function mapStatus(state: string, merged: boolean | undefined): PrStatus {
   if (merged) return 'merged';
@@ -361,6 +376,35 @@ export class OctokitGitHubClient implements GitHubClient {
       body: res.data.body,
       state: res.data.state,
     };
+  }
+
+  async getRepoFile(repo: RepoRef, path: string): Promise<RepoFileResult> {
+    // Allowlist FIRST — a disallowed path never reaches GitHub.
+    if (!isAllowedRepoFilePath(path)) return { ref: path, status: 'missing' };
+    try {
+      const res = await withRetry(() =>
+        withTimeout(
+          this.octokit.rest.repos.getContent({
+            owner: repo.owner,
+            repo: repo.name,
+            path,
+          }),
+          TIMEOUT,
+        ),
+      );
+      const data = res.data;
+      // Only a single text file counts; a directory listing (array) or a
+      // non-file blob is treated as "missing" — never fabricated.
+      if (Array.isArray(data) || data.type !== 'file' || typeof data.content !== 'string') {
+        return { ref: path, status: 'missing' };
+      }
+      const text = Buffer.from(data.content, 'base64').toString('utf8');
+      return { ref: path, status: 'available', text: text.slice(0, MAX_REPO_FILE_BYTES) };
+    } catch {
+      // A 404 / permission error / timeout is "missing context", not a hard
+      // failure — the classifier degrades and marks it, never throws.
+      return { ref: path, status: 'missing' };
+    }
   }
 
   async currentLogin(): Promise<string> {

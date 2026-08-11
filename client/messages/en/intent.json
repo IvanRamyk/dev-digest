@@ -1,0 +1,17 @@
+{
+  "sectionLabel": "Intent & scope",
+  "rerun": "Re-run",
+  "rerunAria": "Re-derive the PR intent",
+  "empty": "No intent derived yet. Run a review or press Re-run to classify this PR.",
+  "loadError": "Could not load the derived intent.",
+  "confidence": "{level} confidence",
+  "inScope": "In scope",
+  "outOfScope": "Out of scope",
+  "sources": "Sources",
+  "sourceStatus": {
+    "available": "available",
+    "missing": "missing"
+  },
+  "missingContext": "Some context could not be fetched, so the scope may be incomplete:",
+  "loading": "Deriving intent…"
+}

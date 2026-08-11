@@ -10,6 +10,7 @@ import { Review as ReviewSchema } from '@devdigest/shared';
 import { assemblePrompt } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
+import { applyScopeFilter, type ScopeIntent } from './scope-filter.js';
 
 /**
  * reviewPullRequest — the review engine entry point.
@@ -71,6 +72,14 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /**
+   * Server-derived intent & scope (a plain resolved string-bag, NOT the Zod
+   * contract). When present, it (a) renders an untrusted `## Intent & scope`
+   * prompt section and (b) drives the post-grounding scope filter that drops
+   * out-of-scope findings, keeping exactly one CRITICAL out-of-bounds signal.
+   * Undefined → both behaviours are off and the pipeline is unchanged.
+   */
+  intent?: ScopeIntent;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -135,6 +144,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 
@@ -201,13 +211,33 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   }
   emit('result', `Citation grounding: ${grounding}`);
 
-  // Score is derived from the findings that SURVIVED grounding (not the model's
-  // self-reported number, and not the pre-grounding set) so the score, the
-  // findings list, and the deterministic event always agree.
+  // Second, INDEPENDENT post-step: the scope filter. Runs only when the caller
+  // resolved an intent. It drops out-of-scope findings that survived grounding,
+  // keeping exactly one CRITICAL out-of-bounds signal, and never goes silent —
+  // every drop is emitted. It does NOT touch the grounding gate above.
+  let finalFindings = ground.kept;
+  const scopeDropped: { finding: Finding; reason: string }[] = [];
+  if (input.intent) {
+    const scoped = applyScopeFilter(ground.kept, input.intent);
+    finalFindings = scoped.kept;
+    scopeDropped.push(...scoped.dropped);
+    for (const d of scoped.dropped) {
+      emit('info', `scope filter dropped "${d.finding.title}": ${d.reason}`);
+    }
+    emit(
+      'result',
+      `Scope filter: kept ${scoped.kept.length}, dropped ${scoped.dropped.length} out-of-scope`,
+    );
+  }
+
+  // Score is derived from the findings that SURVIVED both grounding AND the
+  // scope filter (not the model's self-reported number, and not the pre-filter
+  // set) so the score, the findings list, and the deterministic event always
+  // agree (invariant 3).
   return {
-    review: { ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept) },
+    review: { ...merged, findings: finalFindings, score: scoreFromFindings(finalFindings) },
     grounding,
-    dropped: ground.dropped,
+    dropped: [...ground.dropped, ...scopeDropped],
     mode,
     assembly,
     chunks: chunks.map((c) => ({ label: c.label })),
