@@ -30,6 +30,9 @@ describe('classifyFile — precedence (first match wins)', () => {
     { path: 'go.sum', expect: 'boilerplate' },
     { path: 'types/api.d.ts', expect: 'boilerplate' }, // generated suffix
     { path: 'assets/logo.png', expect: 'boilerplate' }, // binary
+    // drizzle migration metadata → boilerplate (generated wholesale by db:generate)
+    { path: 'server/src/db/migrations/meta/0013_snapshot.json', expect: 'boilerplate' },
+    { path: 'server/src/db/migrations/meta/_journal.json', expect: 'boilerplate' },
     // tests / docs → wiring
     { path: 'src/foo.test.ts', expect: 'wiring' },
     { path: 'src/__tests__/foo.ts', expect: 'wiring' },
@@ -42,6 +45,8 @@ describe('classifyFile — precedence (first match wins)', () => {
     { path: 'vitest.config.ts', expect: 'wiring' },
     { path: 'tailwind.config.js', expect: 'wiring' },
     { path: 'config/app.yml', expect: 'wiring' },
+    // generated migration SQL (the actual DDL) → wiring, not core
+    { path: 'server/src/db/migrations/0013_milky_dagger.sql', expect: 'wiring' },
     // size-gated wiring basename
     { path: 'src/index.ts', additions: 5, deletions: 0, expect: 'wiring' },
     { path: 'src/index.ts', additions: 200, deletions: 0, expect: 'core' }, // too big → core

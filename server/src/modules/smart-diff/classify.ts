@@ -10,6 +10,7 @@ import {
   GENERATED_DIR_SEGMENTS,
   GENERATED_SUFFIXES,
   LOCKFILE_BASENAMES,
+  MIGRATION_SQL_RE,
   TEST_PATH_RE,
   TEST_ROLE,
   WIRING_BASENAMES,
@@ -68,7 +69,7 @@ function toContext(input: ClassifyInput): RuleContext {
  * Ordered rule set — FIRST MATCH WINS. The ordering is load-bearing:
  *   1-4 (generated/binary) run before 5-6 (test/doc) so `__snapshots__/x.snap`
  *   stays boilerplate and never falls through to a test rule;
- *   8 (wiring basename) is size-gated and runs last before the `core` default.
+ *   9 (wiring basename) is size-gated and runs last before the `core` default.
  *
  * `core` is never matched — it is the default a file degrades to, so an unknown
  * extension errs toward "review it".
@@ -99,7 +100,9 @@ export const RULES: readonly Rule[] = [
       CONFIG_BASENAME_RE.test(c.basename) ||
       CONFIG_EXTENSIONS.some((ext) => c.path.endsWith(ext)),
   },
-  // 8. entry-point basename AND a small change → wiring (size-gated)
+  // 8. generated migration SQL → wiring (metadata beside it is boilerplate via rule 3)
+  { role: 'wiring', match: (c) => MIGRATION_SQL_RE.test(c.path) },
+  // 9. entry-point basename AND a small change → wiring (size-gated)
   {
     role: 'wiring',
     match: (c) =>

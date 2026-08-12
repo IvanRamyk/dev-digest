@@ -55,6 +55,10 @@ export const GENERATED_SUFFIXES: readonly string[] = [
   '.generated.ts',
   '.pb.go',
   '_pb2.py',
+  // Drizzle migration metadata — regenerated wholesale by `db:generate`, never
+  // reviewed line-by-line (a 0013_snapshot.json is thousands of generated lines).
+  '_snapshot.json',
+  '_journal.json',
 ];
 
 /** Non-text assets: nothing to line-review. */
@@ -94,6 +98,11 @@ export const CONFIG_BASENAME_RE =
 
 /** Config-shaped extensions → wiring. */
 export const CONFIG_EXTENSIONS: readonly string[] = ['.yml', '.yaml', '.toml', '.ini', '.env'];
+
+/** Generated migration SQL (the actual DDL) → wiring: visible infra worth a
+    glance, but not top-of-review `core`. The `_snapshot.json`/`_journal.json`
+    metadata beside it is caught earlier as boilerplate. */
+export const MIGRATION_SQL_RE = /(^|\/)migrations\/.*\.sql$/;
 
 /**
  * Entry-point / wiring basenames. Only classify as `wiring` when the change is
