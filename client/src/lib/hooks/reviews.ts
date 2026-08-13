@@ -14,6 +14,7 @@ import type {
   ReviewRunResponse,
   RunEvent,
   RunSummary,
+  SmartDiff,
 } from "@devdigest/shared";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
@@ -62,6 +63,22 @@ export function usePrReviews(prId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: qk.pr(prId).reviews,
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
+    enabled: !!prId && enabled,
+  });
+}
+
+// ---- Smart Diff — reviewer-ordered file groups (deterministic, no LLM) ----
+/** The PR's files grouped by review role (core/wiring/boilerplate), ordered by
+   the server, with each file's finding line numbers.
+
+   `enabled` is load-bearing, not cosmetic: `GET /pulls/:id` is what PERSISTS
+   `pr_files` (PullsService.getDetail → replaceDetail), so on a cold load both
+   queries race and smart-diff can read an empty table. Gate it on the detail
+   query: `useSmartDiff(prId, !!pr)`. */
+export function useSmartDiff(prId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: qk.pr(prId).smartDiff,
+    queryFn: () => api.get<SmartDiff>(`/pulls/${prId}/smart-diff`),
     enabled: !!prId && enabled,
   });
 }

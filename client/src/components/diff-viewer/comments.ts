@@ -3,7 +3,7 @@
    DiffComments.tsx. Comments are GitHub PR review comments, proxied live. */
 import type { CSSProperties } from "react";
 import type { PrReviewComment } from "../../lib/types";
-import type { Line } from "./helpers";
+import type { Line } from "@/lib/domain/diff";
 
 /** What the viewer needs to read + write inline comments. */
 export interface DiffCommentApi {

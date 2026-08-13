@@ -98,6 +98,10 @@ export default function PRDetailPage() {
             prId={vm.prId}
             filesCount={pr.files_count}
             files={pr.files}
+            smartDiff={vm.smartDiff}
+            findings={vm.allFindings}
+            order={vm.order}
+            onSetOrder={vm.setOrder}
             canComment={pr.status === "open"}
           />
         )}

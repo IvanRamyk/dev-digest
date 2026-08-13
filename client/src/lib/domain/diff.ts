@@ -1,5 +1,12 @@
-/** Pure helpers for the DiffViewer. */
-import { HUNK_HEADER_RE } from "./constants";
+/* domain/diff.ts — unified-diff parsing. Pure, zero React/CSS/fetch (tier 1, C12).
+
+   Promoted verbatim from `components/diff-viewer/helpers.ts` when Smart Diff
+   became the second consumer: the diff-viewer renders it, and SmartDiffViewer's
+   `filesByPath` reuses the same parse. Keep the semantics identical to the
+   original so both viewers number lines the same way. */
+
+/** Matches a unified-diff hunk header, e.g. `@@ -1,2 +1,3 @@`. */
+export const HUNK_HEADER_RE = /@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
 export interface Line {
   kind: "add" | "del" | "ctx" | "hunk";

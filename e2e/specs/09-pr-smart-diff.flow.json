@@ -1,0 +1,17 @@
+{
+  "name": "PR detail Files changed tab renders the reviewer-ordered Smart Diff",
+  "description": "From PR #482, open the Files changed tab (Smart order is the default) and confirm the reviewer-ordered grouping renders: the Core logic section leads with src/middleware/ratelimit.ts, and the Boilerplate section carries pnpm-lock.yaml. Deterministic seeded data (no model call) — the classifier is pure, so the grouping appears the instant the PR is imported. Assumes a freshly-seeded DB (see e2e/README.md; depends on the 9-file seed).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
+    { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
+    { "cmd": ["wait", "--text", "Core logic"], "label": "the Smart Diff core group header renders" },
+    { "cmd": ["wait", "--text", "src/middleware/ratelimit.ts"], "label": "the core file leads the core group" },
+    { "cmd": ["wait", "--text", "Boilerplate"], "label": "the boilerplate group header renders" },
+    { "cmd": ["wait", "--text", "pnpm-lock.yaml"], "label": "the lockfile is grouped under boilerplate" }
+  ]
+}
