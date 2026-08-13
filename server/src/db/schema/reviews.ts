@@ -9,6 +9,7 @@ import {
   doublePrecision,
   index,
 } from 'drizzle-orm/pg-core';
+import type { IntentSource } from '@devdigest/shared';
 import { now } from './_shared';
 import { workspaces } from './core';
 import { pullRequests } from './pulls';
@@ -77,6 +78,19 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // Widened by the Intent Layer. `confidence` mirrors the IntentConfidence enum
+  // as free text (kept low for legacy rows); `sources`/`missing_context` default
+  // to empty jsonb arrays so pre-widening rows map cleanly into the new DTO.
+  confidence: text('confidence').notNull().default('low'),
+  sources: jsonb('sources').$type<IntentSource[]>().notNull().default(sql`'[]'::jsonb`),
+  missingContext: jsonb('missing_context')
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** The model id the classifier ran with (never a key). Null for legacy rows. */
+  model: text('model'),
+  /** When the intent was last derived (bumped on every re-derivation). */
+  derivedAt: timestamp('derived_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const prBrief = pgTable('pr_brief', {

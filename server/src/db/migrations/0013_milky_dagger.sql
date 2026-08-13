@@ -1,0 +1,1 @@
+CREATE INDEX "pr_files_pr_idx" ON "pr_files" USING btree ("pr_id");

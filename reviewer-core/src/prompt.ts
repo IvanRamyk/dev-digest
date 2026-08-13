@@ -66,10 +66,41 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Server-derived intent & scope for this PR. A plain RESOLVED string-bag, NOT
+   * the Zod `Intent` contract — ring 0 stays free of the contract; the server
+   * maps its `Intent` DTO down to this shape before calling the engine.
+   * Untrusted (the summary can echo an author-controlled body) → rendered inside
+   * `<untrusted>` before the diff. Empty/undefined → section omitted.
+   */
+  intent?: { summary: string; inScope: string[]; outOfScope: string[] };
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
   task?: string;
+}
+
+/** Render the intent string-bag as the body of the `## Intent & scope` block. */
+function renderIntentBody(intent: NonNullable<PromptParts['intent']>): string {
+  const lines: string[] = [];
+  if (intent.summary.trim().length > 0) lines.push(intent.summary.trim());
+  if (intent.inScope.length > 0) {
+    lines.push('', 'In scope:', ...intent.inScope.map((s) => `- ${s}`));
+  }
+  if (intent.outOfScope.length > 0) {
+    lines.push('', 'Out of scope:', ...intent.outOfScope.map((s) => `- ${s}`));
+  }
+  return lines.join('\n');
+}
+
+/** True when the intent bag carries anything worth rendering. */
+function hasIntent(intent: PromptParts['intent']): intent is NonNullable<PromptParts['intent']> {
+  return (
+    !!intent &&
+    (intent.summary.trim().length > 0 ||
+      intent.inScope.length > 0 ||
+      intent.outOfScope.length > 0)
+  );
 }
 
 export interface AssembledPrompt {
@@ -117,6 +148,14 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       `## Callers of changed symbols\n${wrapUntrusted('callers', parts.callers)}`,
     );
   }
+  // Derived intent & scope — untrusted (may echo an author body), wrapped like
+  // every other external block. Rendered right before the diff so the model has
+  // the PR's stated purpose in view while reading the changes. The injection
+  // guard already names "derived intent/scope" as data, never instructions.
+  const intentBody = hasIntent(parts.intent) ? renderIntentBody(parts.intent) : undefined;
+  if (intentBody) {
+    userSections.push(`## Intent & scope\n${wrapUntrusted('intent', intentBody)}`);
+  }
   userSections.push(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`);
 
   const user = userSections.join('\n\n');
@@ -134,6 +173,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentBody ? wrapUntrusted('intent', intentBody) : null,
     user,
   };
 

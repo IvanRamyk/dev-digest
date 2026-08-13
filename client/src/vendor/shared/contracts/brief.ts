@@ -6,10 +6,28 @@ import { z } from 'zod';
  */
 
 // ---- Intent ----
+/** How confident the classifier is in the derived intent/scope. */
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+/**
+ * One input the classifier saw when deriving the intent. `status:'missing'`
+ * records a link (issue/plan/spec) we could not fetch — never a fabricated one.
+ */
+export const IntentSource = z.object({
+  type: z.enum(['pr_body', 'pr_title', 'files', 'issue', 'plan', 'spec']),
+  ref: z.string(),
+  status: z.enum(['available', 'missing']),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
 export const Intent = z.object({
   intent: z.string(),
   in_scope: z.array(z.string()),
   out_of_scope: z.array(z.string()),
+  confidence: IntentConfidence.default('low'),
+  sources: z.array(IntentSource).default([]),
+  missing_context: z.array(z.string()).default([]),
 });
 export type Intent = z.infer<typeof Intent>;
 

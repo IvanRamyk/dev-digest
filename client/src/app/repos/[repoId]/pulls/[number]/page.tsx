@@ -75,7 +75,7 @@ export default function PRDetailPage() {
       />
 
       <div style={s.body}>
-        {vm.tab === "overview" && <OverviewTab prBody={pr.body} />}
+        {vm.tab === "overview" && <OverviewTab prId={vm.prId} prBody={pr.body} />}
 
         {vm.tab === "findings" && (
           <FindingsTab
@@ -98,6 +98,10 @@ export default function PRDetailPage() {
             prId={vm.prId}
             filesCount={pr.files_count}
             files={pr.files}
+            smartDiff={vm.smartDiff}
+            findings={vm.allFindings}
+            order={vm.order}
+            onSetOrder={vm.setOrder}
             canComment={pr.status === "open"}
           />
         )}

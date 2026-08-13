@@ -125,6 +125,17 @@ export interface OpenPrPayload {
   body: string;
 }
 
+/**
+ * Result of an allowlisted in-repo file fetch (plan/spec link resolution for the
+ * intent classifier). Discriminated on `status` so a caller records
+ * `missing_context` without ever fabricating a body: `available` carries the
+ * text, `missing` carries only the ref (disallowed path / not found / fetch
+ * failed). `ref` is always the path that was asked for.
+ */
+export type RepoFileResult =
+  | { ref: string; status: 'available'; text: string }
+  | { ref: string; status: 'missing' };
+
 /** A single file to write in a commit (path relative to repo root + UTF-8 text). */
 export interface CommitFile {
   path: string;
@@ -162,6 +173,14 @@ export interface GitHubClient {
   /** The open PR whose head is `branch`, if any (so re-publish reuses it). */
   findOpenPr(repo: RepoRef, branch: string): Promise<{ url: string } | null>;
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
+  /**
+   * Fetch one in-repo file for intent context (plan/spec links). The caller
+   * passes an ALLOWLISTED path; a disallowed path, a missing file, or any fetch
+   * error returns `{ status: 'missing' }` rather than throwing — the classifier
+   * marks it `missing_context` and never fabricates. Never used for arbitrary
+   * external URLs.
+   */
+  getRepoFile(repo: RepoRef, path: string): Promise<RepoFileResult>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
 }

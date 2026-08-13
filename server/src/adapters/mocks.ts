@@ -17,6 +17,7 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  RepoFileResult,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -125,6 +126,9 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** In-repo file bodies keyed by path — drives `getRepoFile` (plan/spec fetch).
+      A path not present here resolves to `{ status: 'missing' }`. */
+  repoFiles?: Record<string, string>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -232,6 +236,11 @@ export class MockGitHubClient implements GitHubClient {
 
   async getIssue(_repo: RepoRef, n: number): Promise<IssueMeta> {
     return { number: n, title: `Issue #${n}`, body: 'mock issue', state: 'open' };
+  }
+
+  async getRepoFile(_repo: RepoRef, path: string): Promise<RepoFileResult> {
+    const text = this.opts.repoFiles?.[path];
+    return text != null ? { ref: path, status: 'available', text } : { ref: path, status: 'missing' };
   }
 
   async currentLogin(): Promise<string> {

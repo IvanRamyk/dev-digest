@@ -127,8 +127,8 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  upsertIntent(prId: string, intent: Intent, model?: string | null): Promise<void> {
+    return pullRepo.upsertIntent(this.db, prId, intent, model);
   }
 
   getIntent(prId: string): Promise<Intent | undefined> {

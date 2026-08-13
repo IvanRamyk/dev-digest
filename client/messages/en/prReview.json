@@ -66,14 +66,22 @@
     "blockers": " · {count} blockers"
   },
   "smartDiff": {
-    "coreLabel": "Core",
+    "coreLabel": "Core logic",
     "wiringLabel": "Wiring",
     "boilerplateLabel": "Boilerplate",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
     "filesCount": "{count} files",
     "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "groupedByRole": "Smart Diff · grouped by role",
+    "coreCaption": "The substance of the change — review this first",
+    "wiringCaption": "Config, tests, docs, and entry points",
+    "boilerplateCaption": "Generated, lockfiles, and binary — collapsed by default",
+    "summary": "{files} files · +{additions} −{deletions}",
+    "smartOrder": "Smart order",
+    "originalOrder": "Original order",
+    "findingsBadge": "{count} findings",
+    "jumpToFinding": "Jump to first finding in {path}"
   },
   "list": {
     "breadcrumb": "Pull Requests",

@@ -20,6 +20,6 @@ export default async function pollingRoutes(appBase: FastifyInstance) {
 
   app.post('/repos/:id/poll', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);
-    return service.pollRepo(workspaceId, req.params.id);
+    return service.pollRepo(workspaceId, req.params.id, app.log);
   });
 }

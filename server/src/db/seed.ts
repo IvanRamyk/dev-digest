@@ -118,12 +118,113 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       })
       .returning();
 
-    // pr_files (subset)
+    // pr_files — a real 9-file diff so Smart Diff has something to classify:
+    // core logic first, then wiring (package.json + a small src/index.ts), then
+    // boilerplate collapsed at the bottom (lockfile, bundled output, snapshot).
+    // Every row carries a short real patch (the prior seed left them all null).
     await db.insert(t.prFiles).values([
-      { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
+      {
+        prId: pr!.id,
+        path: 'src/middleware/ratelimit.ts',
+        additions: 84,
+        deletions: 0,
+        patch: `@@ -0,0 +1,8 @@
++import type { Request, Response, NextFunction } from 'express';
++import { TokenBucket } from './token-bucket';
++
++const buckets = new Map<string, TokenBucket>();
++
++export function rateLimit(opts: { rpm: number }) {
++  return (req: Request, res: Response, next: NextFunction) => {
++    const key = req.ip;`,
+      },
+      {
+        prId: pr!.id,
+        path: 'src/api/public/webhooks.ts',
+        additions: 31,
+        deletions: 6,
+        patch: `@@ -12,6 +12,9 @@ export async function handleWebhook(req, res) {
+-  await process(req.body);
++  if (!rateLimit(req)) {
++    return res.status(429).json({ error: 'rate_limited' });
++  }
++  await process(req.body);`,
+      },
+      {
+        prId: pr!.id,
+        path: 'src/config.ts',
+        additions: 4,
+        deletions: 0,
+        patch: `@@ -10,3 +10,4 @@
+   port: 3000,
++  stripeKey: "sk_live_xxx",
+   redisUrl: process.env.REDIS_URL,`,
+      },
+      {
+        prId: pr!.id,
+        path: 'src/api/users.ts',
+        additions: 7,
+        deletions: 2,
+        patch: `@@ -43,4 +43,9 @@ export async function listUsers(ids: string[]) {
+-  return Promise.all(ids.map((id) => db.user(id)));
++  const users = [];
++  for (const id of ids) {
++    users.push(await db.user(id));
++  }
++  return users;`,
+      },
+      {
+        prId: pr!.id,
+        path: 'package.json',
+        additions: 3,
+        deletions: 0,
+        patch: `@@ -18,6 +18,9 @@
+   "dependencies": {
++    "rate-limiter-flexible": "^5.0.3",
+     "express": "^4.19.2",`,
+      },
+      {
+        prId: pr!.id,
+        path: 'src/index.ts',
+        additions: 2,
+        deletions: 0,
+        patch: `@@ -8,3 +8,5 @@ const app = express();
++import { rateLimit } from './middleware/ratelimit';
++app.use(rateLimit({ rpm: 60 }));
+ app.listen(3000);`,
+      },
+      {
+        prId: pr!.id,
+        path: 'pnpm-lock.yaml',
+        additions: 92,
+        deletions: 24,
+        patch: `@@ -1204,6 +1204,12 @@ packages:
++  rate-limiter-flexible@5.0.3:
++    resolution: {integrity: sha512-abc123...}
++  /rate-limiter-flexible@5.0.3:
++    dev: false`,
+      },
+      {
+        prId: pr!.id,
+        path: 'dist/bundle.js',
+        additions: 140,
+        deletions: 118,
+        patch: `@@ -1,1 +1,1 @@
+-(()=>{"use strict";var e={};})();
++(()=>{"use strict";var e={},t=new Map;})();`,
+      },
+      {
+        prId: pr!.id,
+        path: '__snapshots__/api.test.ts.snap',
+        additions: 6,
+        deletions: 0,
+        patch: `@@ -14,0 +14,6 @@
++exports[\`rate limit returns 429\`] = \`
++Object {
++  "error": "rate_limited",
++}
++\`;`,
+      },
     ]);
 
     // pr_commits

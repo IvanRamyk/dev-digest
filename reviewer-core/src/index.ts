@@ -34,6 +34,14 @@ export {
 // Map-reduce helpers (reduce partials, slice a file's diff).
 export { reduceReviews, sliceDiff } from './review/reduce.js';
 
+// Pure post-grounding scope filter (drops out-of-scope findings, keeps one
+// CRITICAL out-of-bounds signal).
+export {
+  applyScopeFilter,
+  type ScopeIntent,
+  type ScopeFilterResult,
+} from './review/scope-filter.js';
+
 // The engine entry point: given (diff + resolved agent inputs + LLM) → grounded Review.
 export {
   reviewPullRequest,

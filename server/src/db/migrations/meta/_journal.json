@@ -85,6 +85,20 @@
       "when": 1786170736467,
       "tag": "0011_lovely_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786427208962,
+      "tag": "0012_steady_maggott",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786475310295,
+      "tag": "0013_milky_dagger",
+      "breakpoints": true
     }
   ]
 }

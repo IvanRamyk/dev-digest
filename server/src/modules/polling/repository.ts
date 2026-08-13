@@ -53,6 +53,22 @@ export class PollingRepository {
   }
 
   /**
+   * The stored `id` + `head_sha` for one PR, or `undefined` if it is new to us.
+   * Read BEFORE the upsert so the poll can tell a head-move (existing PR whose
+   * head advanced) from a first-time import — the intent re-derive gate (8b).
+   */
+  async findPullHead(
+    repoId: string,
+    number: number,
+  ): Promise<{ id: string; headSha: string } | undefined> {
+    const [row] = await this.db
+      .select({ id: t.pullRequests.id, headSha: t.pullRequests.headSha })
+      .from(t.pullRequests)
+      .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, number)));
+    return row;
+  }
+
+  /**
    * Idempotent import — unique on (repo_id, number). Only the fields that
    * actually move between polls are refreshed on conflict; author/branch/base
    * are immutable for a PR and the diff stats are owned by the backfill in

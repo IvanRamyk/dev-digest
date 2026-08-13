@@ -1,5 +1,6 @@
 import type { Container } from '../../platform/container.js';
 import { NotFoundError } from '../../platform/errors.js';
+import { IntentService } from '../intent/service.js';
 import { PollingRepository } from './repository.js';
 
 /**
@@ -21,6 +22,9 @@ export interface PollResult {
   reviewTriggered: boolean;
 }
 
+/** Minimal pino-compatible logger for the best-effort intent re-derive path. */
+type Logger = { warn: (obj: unknown, msg?: string) => void };
+
 export class PollingService {
   private repo: PollingRepository;
 
@@ -35,7 +39,7 @@ export class PollingService {
    * No review is triggered here — review is manual (user presses Run Review,
    * owned by A2).
    */
-  async pollRepo(workspaceId: string, repoId: string): Promise<PollResult> {
+  async pollRepo(workspaceId: string, repoId: string, log?: Logger): Promise<PollResult> {
     const repo = await this.repo.findRepo(workspaceId, repoId);
     if (!repo) throw new NotFoundError('Repo not found');
 
@@ -43,6 +47,8 @@ export class PollingService {
     const pulls = await gh.listPullRequests({ owner: repo.owner, name: repo.name });
     let synced = 0;
     for (const pr of pulls) {
+      // Read the stored head BEFORE upserting so we can detect a head-move.
+      const prior = await this.repo.findPullHead(repo.id, pr.number);
       await this.repo.upsertPull({
         workspaceId,
         repoId: repo.id,
@@ -59,9 +65,40 @@ export class PollingService {
         updatedAt: pr.updated_at ? new Date(pr.updated_at) : null,
       });
       synced++;
+
+      // Best-effort: an EXISTING PR whose head advanced gets its intent
+      // re-derived — but only if it already had one (never pay the classifier on
+      // every unreviewed PR). This is deliberately unlike the loud GitHub sync:
+      // a classifier error is caught → log.warn, and NEVER fails the poll or
+      // touches `synced` (R5 / step 8b).
+      if (prior && prior.headSha !== pr.head_sha) {
+        await this.reDeriveIntentBestEffort(workspaceId, prior.id, log);
+      }
     }
     await this.repo.touchLastPolledAt(repo.id, new Date());
 
     return { synced, reviewTriggered: false };
+  }
+
+  /**
+   * Re-derive a PR's intent after its head moved. Fully swallowed: only fires
+   * when the PR already has a stored intent, and any classifier failure degrades
+   * to a warning so the poll's success is never affected.
+   */
+  private async reDeriveIntentBestEffort(
+    workspaceId: string,
+    prId: string,
+    log?: Logger,
+  ): Promise<void> {
+    try {
+      const intentService = new IntentService(this.container);
+      if (!(await intentService.hasIntent(prId))) return;
+      await intentService.derive(workspaceId, prId);
+    } catch (err) {
+      log?.warn(
+        { prId, err: (err as Error).message },
+        'polling: intent re-derivation failed (best-effort)',
+      );
+    }
   }
 }

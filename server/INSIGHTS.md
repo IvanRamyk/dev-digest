@@ -63,6 +63,19 @@ _None yet._
 
 <!-- version constraints and quirks of deps and the toolchain -->
 
+- 2026-08-11 — passing a Zod contract that has `.default()` fields as the
+  `schema` of `llm.completeStructured({ schema })` (e.g. `Intent` with
+  `confidence`/`sources`/`missing_context` defaults) does two non-obvious things:
+  (a) `T` infers to the schema's INPUT type, where the defaulted fields are
+  OPTIONAL — so a downstream `intent.confidence` reads as `"…"|undefined` and the
+  assignment to the OUTPUT `Intent` fails to typecheck; (b) the OpenAI SDK's
+  `zodResponseFormat` prints `uses .optional() without .nullable() … not supported
+  by the API` warnings on every structured call. Neither is fatal here (the mock
+  parses; providers tolerate it) → drop the explicit `<Intent>` type param and
+  re-parse the result with `IntentSchema.parse(res.data)` to recover the OUTPUT
+  type; leave the contract's `.default()`s alone unless a real OpenAI structured
+  call starts erroring, in which case the fix is `.nullable().default()` in the
+  contract, not the caller (`server/src/modules/intent/service.ts:118-125`)
 - 2026-08-08 — `@ast-grep/napi`'s `root.findAll({ rule: { pattern } })` does
   **not** throw on a syntactically garbage pattern (e.g. unbalanced parens like
   `)))not a real pattern(((`) — it just runs and returns zero matches, the same
