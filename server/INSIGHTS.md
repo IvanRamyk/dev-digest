@@ -39,6 +39,7 @@ _None yet._
 
 <!-- conventions and architecture that are not obvious from reading the code -->
 
+- 2026-08-24 — `BlastResult` carries endpoints at TWO different granularities and they are not interchangeable (narrower case of the 2026-08-08 facade entry below): `impactedEndpoints` is a FLAT union across the whole map, while `factsByFile[callerFile].{endpoints,crons}` is PER-caller-file. The `BlastRadius` wire contract wants per-symbol attribution, so map endpoints by unioning `factsByFile` across a symbol-group's caller files — NOT from `impactedEndpoints`. `factsByFile` is present only on the persistent path and ABSENT on the degraded/ripgrep path (`types.ts:84` marks it optional); on that path the only endpoint source is the flat `impactedEndpoints`, so every symbol necessarily gets the same list and crons are unavailable — set `index_state.status` so the client can explain the partial attribution rather than trust it (`server/src/modules/blast/helpers.ts:53-77`)
 - 2026-08-08 — the repo-intel facade (`modules/repo-intel/types.ts`) exposes no
   raw-row reads over `file_edges`/`file_facts`/`symbols` — only aggregated/degraded
   views (`getBlastRadius`, `getSymbolsInFiles`, …). The conventions miners need the

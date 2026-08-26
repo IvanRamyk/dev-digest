@@ -63,6 +63,9 @@ export const qk = {
       // invalidateQueries({ queryKey: qk.pr(prId).all }) refreshes the smart
       // diff when a run settles — no new invalidation code needed (C15).
       smartDiff: ["pr", prId, "smart-diff"] as const,
+      // Nested under this PR's prefix, like smartDiff, so a run settling under
+      // qk.pr(prId).all also refreshes the blast map — no new invalidation code.
+      blast: ["pr", prId, "blast"] as const,
     }) as const,
 
   // ---- Run trace (keyed by run, not by PR) ----

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, Button, Tabs } from "@devdigest/ui";
 import { RunReviewDropdown } from "../RunReviewDropdown";
 import { s } from "./styles";
@@ -11,6 +12,8 @@ export interface PrDetailHeaderProps {
   prId: string | null;
   tab: string;
   findingsCount: number;
+  /** Number of changed symbols in the blast map — the Blast tab's count badge. */
+  blastSymbolCount?: number;
   /** github.com PR URL; null when the repo's full_name isn't known yet. */
   githubUrl?: string | null;
   onSetTab: (tab: string) => void;
@@ -22,10 +25,12 @@ export function PrDetailHeader({
   prId,
   tab,
   findingsCount,
+  blastSymbolCount,
   githubUrl,
   onSetTab,
   onRunStart,
 }: PrDetailHeaderProps) {
+  const tBlast = useTranslations("blast");
   const statusColor =
     pr.status === "merged"
       ? "var(--ok)"
@@ -105,6 +110,7 @@ export function PrDetailHeader({
           { key: "overview", label: "Overview", icon: "FileText" },
           { key: "findings", label: "Agent runs", icon: "AlertOctagon", count: findingsCount || undefined },
           { key: "diff", label: "Files changed", icon: "Code", count: pr.files_count },
+          { key: "blast", label: tBlast("tab.label"), icon: "GitBranch", count: blastSymbolCount || undefined },
         ]}
       />
     </div>

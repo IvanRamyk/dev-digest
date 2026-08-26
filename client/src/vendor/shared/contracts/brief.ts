@@ -54,10 +54,24 @@ export const DownstreamImpact = z.object({
 });
 export type DownstreamImpact = z.infer<typeof DownstreamImpact>;
 
+/**
+ * Whether the repo-intel index behind a blast result is complete. A `partial`,
+ * `degraded`, or `failed` status is how a thin/absent index surfaces to the
+ * client as a *state to explain*, so an empty `downstream` array is never
+ * mistaken for "no impact" (spec item 6). `reason` carries the facade's
+ * degraded reason when present.
+ */
+export const BlastIndexState = z.object({
+  status: z.enum(['full', 'partial', 'degraded', 'failed']),
+  reason: z.string().nullish(),
+});
+export type BlastIndexState = z.infer<typeof BlastIndexState>;
+
 export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  index_state: BlastIndexState,
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 

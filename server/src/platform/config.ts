@@ -26,6 +26,11 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Blast-radius one-paragraph LLM summary. Default OFF — the blast map is
+  // deterministic without it, and the model only ever writes prose (never
+  // nodes/links). Set BLAST_SUMMARY_ENABLED=true to opt in; when off,
+  // `BlastRadius.summary` is a deterministic string and zero LLM calls are made.
+  BLAST_SUMMARY_ENABLED: z.string().optional(),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -59,6 +64,12 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /**
+   * Whether the optional one-paragraph blast-radius LLM summary is enabled.
+   * Default false — the deterministic summary string is used and no LLM call
+   * is made unless this is explicitly turned on.
+   */
+  blastSummaryEnabled: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -77,5 +88,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
+    blastSummaryEnabled: parsed.BLAST_SUMMARY_ENABLED === 'true',
   };
 }

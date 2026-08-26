@@ -34,6 +34,13 @@ export type {
 export type { Review, Finding, Severity, Verdict } from "@devdigest/shared";
 export type { PrBrief, SmartDiff, Intent, IntentSource, IntentConfidence } from "@devdigest/shared";
 export type {
+  BlastRadius,
+  BlastIndexState,
+  ChangedSymbol,
+  BlastCaller,
+  DownstreamImpact,
+} from "@devdigest/shared";
+export type {
   ConventionCandidate,
   ConventionCategory,
   ConventionStatus,
