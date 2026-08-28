@@ -31,9 +31,9 @@ const VALID_SEVERITIES = new Set<string>(Severity.options);
  */
 export type ToolTextResult = CallToolResult;
 
-/** A successful JSON result (object serialized to a text content block). */
+/** A successful JSON result (object serialized COMPACT into a text content block). */
 export function okJson(obj: unknown): ToolTextResult {
-  return { content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] };
+  return { content: [{ type: 'text', text: JSON.stringify(obj) }] };
 }
 
 /** An error result the model can act on: `isError:true` with a plain-text message. */
@@ -88,6 +88,8 @@ export interface DetailedFinding extends ConciseFinding {
 
 export interface ShapedFindings {
   items: (ConciseFinding | DetailedFinding)[];
+  /** Count of findings that passed the severity filter, BEFORE the display cap. */
+  total: number;
   truncated_note?: string;
 }
 
@@ -118,7 +120,7 @@ export function shapeFindings(
     opts.format === 'detailed' ? toDetailed(f) : toConcise(f),
   );
 
-  const shaped: ShapedFindings = { items };
+  const shaped: ShapedFindings = { items, total: filtered.length };
   if (sorted.length > FINDINGS_CAP) {
     shaped.truncated_note = `Showing ${FINDINGS_CAP} of ${sorted.length} findings (severity-ordered). Filter by severity or use devdigest_get_findings for more.`;
   }

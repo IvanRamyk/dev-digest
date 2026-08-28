@@ -56,6 +56,10 @@ export const getFindingsShape = {
   pr: prField.optional(),
   response_format: responseFormatField,
   severity: severityField,
+  all_runs: z
+    .boolean()
+    .optional()
+    .describe('Include every run\'s review, not just the latest. Ignored when run_id is set.'),
 } as const;
 
 /** `devdigest_get_conventions`. */

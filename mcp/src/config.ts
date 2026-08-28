@@ -1,5 +1,8 @@
 /**
- * Runtime configuration, read once from the environment at startup.
+ * Runtime configuration, read once from the environment at startup and validated
+ * with Zod. An invalid value (e.g. a non-numeric timeout or a malformed API URL)
+ * makes `loadConfig` THROW so the server fails fast at boot rather than running
+ * with a silently-defaulted misconfiguration.
  *
  * Everything here is server-controlled (env vars set by whoever launches the
  * MCP server), never attacker-controlled tool input. Secrets are NOT accepted
@@ -7,6 +10,7 @@
  * local no-auth service (`server/src/adapters/auth/local.ts`), so the token is
  * unset by default and never logged.
  */
+import { z } from 'zod';
 
 export interface McpConfig {
   /** Base URL of the DevDigest HTTP API. No `/api` prefix — routes sit at root. */
@@ -17,7 +21,7 @@ export interface McpConfig {
   runMaxWaitMs: number;
   /** Delay between `GET /pulls/:id/runs` polls while a run is in flight. */
   pollIntervalMs: number;
-  /** When true, register the (stub) `devdigest_get_blast_radius` tool. Off by default. */
+  /** When true, force-register the `devdigest_get_blast_radius` tool (now default-on regardless). */
   enableBlastRadius: boolean;
 }
 
@@ -27,29 +31,51 @@ const DEFAULTS = {
   pollIntervalMs: 3_000,
 } as const;
 
-/** Parse a positive-integer env var, falling back to `fallback` when unset or invalid. */
-function intEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw.trim() === '') return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
-}
+/** Treat an empty/whitespace-only env var as "unset" so the schema default applies. */
+const emptyToUndefined = (v: unknown): unknown =>
+  typeof v === 'string' && v.trim() === '' ? undefined : v;
 
-/** Parse a boolean-ish env var. `1`, `true`, `yes`, `on` (case-insensitive) → true. */
-function boolEnv(name: string): boolean {
-  const raw = process.env[name];
-  if (raw === undefined) return false;
-  return /^(1|true|yes|on)$/i.test(raw.trim());
-}
+/** A positive-integer millisecond env var. Invalid (non-numeric, ≤0) → parse error → throw. */
+const positiveIntMs = (fallback: number) =>
+  z.preprocess(emptyToUndefined, z.coerce.number().int().positive().default(fallback));
 
+/** Boolean-ish env var: `1`, `true`, `yes`, `on` (case-insensitive) → true; anything else → false. */
+const booleanish = z.preprocess(
+  (v) => (typeof v === 'string' ? /^(1|true|yes|on)$/i.test(v.trim()) : v),
+  z.boolean().default(false),
+);
+
+/** The env contract. Unknown keys are ignored; declared keys are validated/coerced. */
+const EnvSchema = z.object({
+  DEVDIGEST_API_URL: z.preprocess(
+    emptyToUndefined,
+    z.string().url('DEVDIGEST_API_URL must be a valid URL').default(DEFAULTS.apiUrl),
+  ),
+  DEVDIGEST_API_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  MCP_RUN_MAX_WAIT_MS: positiveIntMs(DEFAULTS.runMaxWaitMs),
+  MCP_POLL_INTERVAL_MS: positiveIntMs(DEFAULTS.pollIntervalMs),
+  MCP_ENABLE_BLAST_RADIUS: booleanish,
+});
+
+/**
+ * Parse + validate the environment into an `McpConfig`. THROWS a readable error
+ * listing every offending variable when validation fails — the server is meant
+ * to crash at startup on a bad config, not limp along on defaults.
+ */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): McpConfig {
-  const apiUrl = (env.DEVDIGEST_API_URL?.trim() || DEFAULTS.apiUrl).replace(/\/+$/, '');
-  const token = env.DEVDIGEST_API_TOKEN?.trim();
+  const parsed = EnvSchema.safeParse(env);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.') || '(env)'}: ${i.message}`)
+      .join('\n');
+    throw new Error(`Invalid MCP server configuration:\n${issues}`);
+  }
+  const v = parsed.data;
   return {
-    apiUrl,
-    apiToken: token && token.length > 0 ? token : undefined,
-    runMaxWaitMs: intEnv('MCP_RUN_MAX_WAIT_MS', DEFAULTS.runMaxWaitMs),
-    pollIntervalMs: intEnv('MCP_POLL_INTERVAL_MS', DEFAULTS.pollIntervalMs),
-    enableBlastRadius: boolEnv('MCP_ENABLE_BLAST_RADIUS'),
+    apiUrl: v.DEVDIGEST_API_URL.replace(/\/+$/, ''),
+    apiToken: v.DEVDIGEST_API_TOKEN,
+    runMaxWaitMs: v.MCP_RUN_MAX_WAIT_MS,
+    pollIntervalMs: v.MCP_POLL_INTERVAL_MS,
+    enableBlastRadius: v.MCP_ENABLE_BLAST_RADIUS,
   };
 }

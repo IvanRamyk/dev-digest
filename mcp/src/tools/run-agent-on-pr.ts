@@ -128,7 +128,7 @@ export function runAgentOnPrHandler(client: ApiClient, config: McpConfig) {
         repo: args.repo,
         pr: args.pr,
         ...(review ? { verdict: review.verdict, score: review.score } : {}),
-        findings: wrapUntrusted('pr_findings', JSON.stringify(shaped.items, null, 2)),
+        findings: wrapUntrusted('pr_findings', JSON.stringify(shaped.items)),
         ...(shaped.truncated_note ? { truncated_note: shaped.truncated_note } : {}),
         ...(findings.length === 0 ? { note: 'Reviewed, clean — no findings.' } : {}),
       });

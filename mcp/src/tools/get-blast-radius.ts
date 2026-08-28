@@ -45,7 +45,7 @@ export function blastRadiusHandler(client: ApiClient) {
           : {}),
         index_state: blast.index_state,
         summary: blast.summary,
-        impact: wrapUntrusted('pr_blast_radius', JSON.stringify(shaped, null, 2)),
+        impact: wrapUntrusted('pr_blast_radius', JSON.stringify(shaped)),
         ...(blast.changed_symbols.length === 0
           ? { note: 'No changed symbols were found in this PR\'s files.' }
           : {}),

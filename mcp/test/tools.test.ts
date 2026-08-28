@@ -114,7 +114,7 @@ describe('devdigest_get_conventions', () => {
 });
 
 describe('devdigest_get_findings', () => {
-  it('reads by repo+pr and shapes concise findings', async () => {
+  it('reads by repo+pr and groups findings under reviews with a total', async () => {
     const client = fakeClient();
     client.getRepos.mockResolvedValue([makeRepo()]);
     client.getPulls.mockResolvedValue([makePr({ number: 7, id: 'pull-1' })]);
@@ -122,8 +122,44 @@ describe('devdigest_get_findings', () => {
     const out = parseResult(
       await getFindingsHandler(client, testConfig)({ repo: 'acme/widget', pr: 7 }),
     );
-    expect(out.verdict).toBe('comment');
-    expect(out.findings).toContain('Possible null deref');
+    // Grouped shape: { reviews: [{ run_id, verdict, score, findings }], total_findings }
+    expect(out.reviews).toHaveLength(1);
+    expect(out.reviews[0].verdict).toBe('comment');
+    expect(out.reviews[0].findings).toContain('<untrusted_content source="pr_findings">');
+    expect(out.reviews[0].findings).toContain('Possible null deref');
+    expect(out.total_findings).toBe(1);
+  });
+
+  it('default returns only the latest review; all_runs:true returns every run', async () => {
+    const client = fakeClient();
+    client.getRepos.mockResolvedValue([makeRepo()]);
+    client.getPulls.mockResolvedValue([makePr({ number: 7, id: 'pull-1' })]);
+    const older = makeReview({
+      id: 'rev-0',
+      run_id: 'run-0',
+      created_at: '2026-08-22T00:00:00.000Z',
+      findings: [makeFinding({ id: 'f-old', title: 'Old finding' })],
+    });
+    const newer = makeReview({
+      id: 'rev-1',
+      run_id: 'run-1',
+      created_at: '2026-08-23T00:00:00.000Z',
+      findings: [makeFinding({ id: 'f-new', title: 'New finding' })],
+    });
+    client.getReviews.mockResolvedValue([older, newer]);
+
+    const latest = parseResult(
+      await getFindingsHandler(client, testConfig)({ repo: 'acme/widget', pr: 7 }),
+    );
+    expect(latest.reviews).toHaveLength(1);
+    expect(latest.reviews[0].run_id).toBe('run-1');
+    expect(latest.total_findings).toBe(1);
+
+    const all = parseResult(
+      await getFindingsHandler(client, testConfig)({ repo: 'acme/widget', pr: 7, all_runs: true }),
+    );
+    expect(all.reviews.map((r: { run_id: string }) => r.run_id)).toEqual(['run-1', 'run-0']);
+    expect(all.total_findings).toBe(2);
   });
 
   it('by run_id, a still-running run returns status guidance not findings', async () => {

@@ -11,7 +11,7 @@
  *
  * SECURITY: finding text is PR-derived (third-party) → wrapped untrusted.
  */
-import type { ApiClient, ReviewFindingDto, ReviewRecordDto } from '../api/client.js';
+import type { ApiClient, ReviewRecordDto } from '../api/client.js';
 import {
   normalizeFormat,
   normalizeSeverity,
@@ -32,6 +32,17 @@ interface GetFindingsArgs {
   pr?: number;
   response_format?: string;
   severity?: string;
+  all_runs?: boolean;
+}
+
+/** One review in the grouped response: server/model-authored fields, plus the
+ *  review's findings wrapped as untrusted (third-party) text. */
+interface ReviewGroup {
+  run_id: string | null;
+  verdict: string | null;
+  score: number | null;
+  findings: string;
+  truncated_note?: string;
 }
 
 export function getFindingsHandler(client: ApiClient, _config: McpConfig) {
@@ -55,20 +66,25 @@ export function getFindingsHandler(client: ApiClient, _config: McpConfig) {
       }
 
       const reviews = await client.getReviews(pullId.value);
-      const relevant = args.run_id
-        ? reviews.filter((r) => r.run_id === args.run_id)
-        : reviews;
+      const included = selectReviews(reviews, args);
 
-      const findings: ReviewFindingDto[] = relevant.flatMap((r) => r.findings);
-      const shaped = shapeFindings(findings, { format, severity: sev.value });
-      const latest = pickLatest(relevant);
+      let totalFindings = 0;
+      const grouped: ReviewGroup[] = included.map((r) => {
+        const shaped = shapeFindings(r.findings, { format, severity: sev.value });
+        totalFindings += shaped.total;
+        return {
+          run_id: r.run_id,
+          verdict: r.verdict,
+          score: r.score,
+          findings: wrapUntrusted('pr_findings', JSON.stringify(shaped.items)),
+          ...(shaped.truncated_note ? { truncated_note: shaped.truncated_note } : {}),
+        };
+      });
 
       return okJson({
-        ...(args.run_id ? { run_id: args.run_id } : {}),
-        ...(latest ? { verdict: latest.verdict, score: latest.score } : {}),
-        findings: wrapUntrusted('pr_findings', JSON.stringify(shaped.items, null, 2)),
-        ...(shaped.truncated_note ? { truncated_note: shaped.truncated_note } : {}),
-        ...(findings.length === 0 ? { note: 'No findings — reviewed and clean.' } : {}),
+        reviews: grouped,
+        total_findings: totalFindings,
+        ...(totalFindings === 0 ? { note: 'No findings — reviewed and clean.' } : {}),
       });
     } catch (err) {
       if (err instanceof ApiUnreachableError) return toolError(unreachableMessage(err));
@@ -97,6 +113,24 @@ async function resolvePull(
   const repoId = await resolveRepoId(client, args.repo);
   const pullId = await resolvePullId(client, repoId, args.repo, args.pr);
   return { value: pullId };
+}
+
+/**
+ * Choose which review records to return:
+ *  - run_id given  → only that run's review(s);
+ *  - all_runs true → every review, newest first;
+ *  - default       → just the latest review.
+ * Prefers `review`-kind records (they carry findings) when any exist.
+ */
+function selectReviews(reviews: ReviewRecordDto[], args: GetFindingsArgs): ReviewRecordDto[] {
+  const reviewKind = reviews.filter((r) => r.kind === 'review');
+  const pool = reviewKind.length ? reviewKind : reviews;
+
+  if (args.run_id) return pool.filter((r) => r.run_id === args.run_id);
+  if (args.all_runs) return [...pool].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
+  const latest = pickLatest(pool);
+  return latest ? [latest] : [];
 }
 
 /** Guidance for a run that is not `done` yet. */

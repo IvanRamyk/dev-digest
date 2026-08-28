@@ -46,7 +46,7 @@ export function getConventionsHandler(client: ApiClient) {
         repo: args.repo,
         scan_status: view.scan.status,
         status_filter: status.value,
-        conventions: wrapUntrusted('repo_conventions', JSON.stringify(rules, null, 2)),
+        conventions: wrapUntrusted('repo_conventions', JSON.stringify(rules)),
       });
     } catch (err) {
       if (err instanceof ApiUnreachableError) return toolError(unreachableMessage(err));
