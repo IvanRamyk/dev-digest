@@ -3,16 +3,36 @@
     "symbols": "symbols",
     "callers": "callers",
     "endpoints": "endpoints",
-    "crons": "cron/jobs"
+    "crons": "cron"
   },
   "view": {
-    "tree": "tree",
-    "graph": "graph"
+    "tree": "Tree",
+    "graph": "Graph",
+    "groupAria": "Blast radius view",
+    "graphDisabledTitle": "Graph view is not available yet"
   },
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"
+  },
+  "tab": {
+    "label": "Blast"
+  },
+  "sectionLabel": "Blast radius",
+  "loading": "Loading blast radius…",
+  "loadError": "Could not load the blast radius for this PR.",
+  "empty": "No changed symbols were found in this PR's files.",
+  "changedSymbols": "Changed symbols",
+  "openInGithubAria": "Open {file} line {line} on GitHub",
+  "endpointsLabel": "Endpoints affected",
+  "cronsLabel": "Cron jobs affected",
+  "summaryLabel": "Summary",
+  "priorPrsLabel": "Prior PRs touching these files",
+  "priorPrsUnavailable": "Prior-PR overlap is not available on this page.",
+  "degraded": {
+    "partial": "The code index for this repo is incomplete ({status}), so the impact below may be partial. Index the repo to see the full blast radius.",
+    "reason": "Reason: {reason}"
   }
 }

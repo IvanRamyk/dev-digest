@@ -18,14 +18,19 @@ import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
+import { BlastTab } from "./_components/BlastTab";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
 import { usePrDetailPage } from "./_components/hooks/usePrDetailPage";
+import { usePrBlast } from "@/lib/hooks/blast";
 import { s } from "./styles";
 
 export default function PRDetailPage() {
   const { repoId, number } = useParams<{ repoId: string; number: string }>();
   const t = useTranslations("prReview");
   const vm = usePrDetailPage(repoId, number);
+  // Cached read for the Blast tab's count badge; the BlastTab itself re-reads
+  // the same key (TanStack dedupes), so there is no second request.
+  const blast = usePrBlast(vm.prId);
 
   if (vm.repoNotFound) {
     return (
@@ -69,6 +74,7 @@ export default function PRDetailPage() {
         prId={vm.prId}
         tab={vm.tab}
         findingsCount={vm.findingsCount}
+        blastSymbolCount={blast.data?.changed_symbols.length}
         githubUrl={vm.githubUrl}
         onSetTab={vm.setTab}
         onRunStart={vm.onRunStart}
@@ -104,6 +110,10 @@ export default function PRDetailPage() {
             onSetOrder={vm.setOrder}
             canComment={pr.status === "open"}
           />
+        )}
+
+        {vm.tab === "blast" && (
+          <BlastTab prId={vm.prId} repoFullName={vm.repoFullName} headSha={pr.head_sha} />
         )}
       </div>
 
